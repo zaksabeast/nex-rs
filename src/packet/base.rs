@@ -35,4 +35,12 @@ impl BasePacket {
             rmc_request: RMCRequest::default(),
         }
     }
+
+    pub fn get_flags(&self) -> PacketFlags {
+        self.flags
+    }
+
+    pub fn get_packet_type(&self) -> PacketType {
+        self.packet_type
+    }
 }

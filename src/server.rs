@@ -1,5 +1,9 @@
-use crate::{client::Client, counter::Counter, packet::Packet};
-use std::net::UdpSocket;
+use crate::{
+    client::Client,
+    counter::Counter,
+    packet::{Packet, PacketType},
+};
+use tokio::net::UdpSocket;
 
 pub struct Server {
     socket: Option<UdpSocket>,
@@ -16,6 +20,7 @@ pub struct Server {
     kerberos_key_derivation: u32,
     server_version: u32,
     connection_id_counter: Counter,
+    clients: Vec<Client>,
 }
 
 impl Default for Server {
@@ -35,6 +40,7 @@ impl Default for Server {
             kerberos_key_size: 32,
             kerberos_key_derivation: 0,
             connection_id_counter: Counter::default(),
+            clients: vec![],
         }
     }
 }
@@ -57,11 +63,16 @@ impl Server {
     }
 
     async fn listen(&mut self, addr: &str) -> Result<(), &'static str> {
-        let socket = UdpSocket::bind(addr).map_err(|_| "Couldn't bind to address")?;
+        let socket = UdpSocket::bind(addr)
+            .await
+            .map_err(|_| "Couldn't bind to address")?;
         self.socket = Some(socket);
 
         loop {
-            self.handle_socket_message().await?;
+            let result = self.handle_socket_message().await;
+            if result.is_err() {
+                println!("Error {:?}", result);
+            }
         }
     }
 
@@ -74,9 +85,47 @@ impl Server {
 
         let (receive_size, peer) = socket
             .recv_from(&mut buf)
+            .await
             .map_err(|_| "UDP Receive error")?;
 
-        Ok(())
+        let found_client = self
+            .clients
+            .iter_mut()
+            .find(|client| client.get_address() == peer);
+
+        let client = if found_client.is_some() {
+            found_client.unwrap()
+        } else {
+            let new_client = Client::new(peer, self);
+            self.clients.push(new_client);
+            // We just pushed a client, so we know one exists
+            self.clients.last_mut().unwrap()
+        };
+
+        let packet = client.new_packet(buf)?;
+
+        client.increase_ping_timeout_time(self.ping_timeout);
+
+        let base = packet.get_base();
+        let flags = base.get_flags();
+
+        if flags.ack() || flags.multi_ack() {
+            return Ok(());
+        }
+
+        if flags.needs_ack() {
+            unimplemented!()
+        }
+
+        match base.get_packet_type() {
+            PacketType::Connect
+            | PacketType::Data
+            | PacketType::Disconnect
+            | PacketType::Ping
+            | PacketType::Syn => {
+                unimplemented!()
+            }
+        }
     }
 
     fn client_connected(&mut self, client: &mut Client) -> bool {

@@ -1,4 +1,5 @@
-use crate::{counter::Counter, rc4::Rc4, server::Server};
+use crate::{counter::Counter, packet::PacketV1, rc4::Rc4, server::Server};
+use std::net::SocketAddr;
 
 pub struct ClientContext {
     pub cipher: Rc4,
@@ -23,6 +24,7 @@ impl Default for ClientContext {
 }
 
 pub struct Client {
+    address: SocketAddr,
     secure_key: Vec<u8>,
     server_connection_signature: Vec<u8>,
     client_connection_signature: Vec<u8>,
@@ -37,8 +39,9 @@ pub struct Client {
 }
 
 impl Client {
-    pub fn new(server: &mut Server) -> Self {
+    pub fn new(address: SocketAddr, server: &mut Server) -> Self {
         Self {
+            address,
             secure_key: vec![],
             server_connection_signature: vec![],
             client_connection_signature: vec![],
@@ -60,12 +63,16 @@ impl Client {
         }
     }
 
+    pub fn new_packet(&mut self, data: Vec<u8>) -> Result<PacketV1, &'static str> {
+        PacketV1::new(data, &mut self.context)
+    }
+
     fn reset(&mut self) {
         unimplemented!();
     }
 
-    fn get_address(&self) -> String {
-        unimplemented!();
+    pub fn get_address(&self) -> SocketAddr {
+        self.address
     }
 
     fn update_rc4_key(&mut self, rc4_key: Vec<u8>) {
@@ -76,7 +83,7 @@ impl Client {
         unimplemented!();
     }
 
-    fn increase_ping_timeout_time(&mut self, seconds: u32) {
+    pub fn increase_ping_timeout_time(&mut self, seconds: u32) {
         unimplemented!();
     }
 

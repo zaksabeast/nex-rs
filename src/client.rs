@@ -19,6 +19,25 @@ pub struct Client<'a> {
 }
 
 impl<'a> Client<'a> {
+    pub fn new(server: &'a mut Server) -> Self {
+        Self {
+            server,
+            cipher: Arc4::with_key(&[0]),
+            decipher: Arc4::with_key(&[0]),
+            signature_key: vec![],
+            signature_base: 0,
+            secure_key: vec![],
+            server_connection_signature: vec![],
+            client_connection_signature: vec![],
+            session_id: 0,
+            session_key: vec![],
+            pid: 0,
+            local_station_url: "".to_string(),
+            connection_id: 0,
+            connected: false,
+        }
+    }
+
     pub fn get_server(&self) -> &Server {
         self.server
     }

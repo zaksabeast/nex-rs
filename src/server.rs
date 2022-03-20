@@ -14,6 +14,23 @@ pub struct Server {
 }
 
 impl Server {
+    pub fn new() -> Self {
+        Self {
+            access_key: "".to_string(),
+            nex_version: 0,
+            server_version: 0,
+            use_packet_compression: false,
+            prudp_version: 1,
+            fragment_size: 1300,
+            ping_timeout: 5,
+            signature_version: 0,
+            flags_version: 1,
+            checksum_version: 1,
+            kerberos_key_size: 32,
+            kerberos_key_derivation: 0,
+        }
+    }
+
     pub fn set_nex_version(&mut self, nex_version: u32) {
         self.nex_version = nex_version;
     }

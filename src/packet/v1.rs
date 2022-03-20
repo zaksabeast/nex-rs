@@ -1,5 +1,7 @@
 use super::{Packet, PacketFlags, PacketOption, PacketType};
 use crate::stream_in::StreamIn;
+use hmac::{Hmac, Mac};
+use md5::Md5;
 use no_std_io::{Cursor, StreamContainer, StreamReader};
 
 pub struct PacketV1<'a> {
@@ -143,6 +145,16 @@ impl<'a> PacketV1<'a> {
         options: &[u8],
         payload: &[u8],
     ) -> Vec<u8> {
-        unimplemented!()
+        let key = self.packet.sender.get_signature_key();
+        let signature_base = self.packet.sender.get_signature_base();
+
+        let mut mac = Hmac::<Md5>::new_from_slice(key).expect("Invalid hamc key size");
+        mac.update(&header[4..]);
+        mac.update(self.packet.sender.get_session_key());
+        mac.update(&signature_base.to_le_bytes());
+        mac.update(connection_signature);
+        mac.update(options);
+        mac.update(payload);
+        mac.finalize().into_bytes().to_vec()
     }
 }

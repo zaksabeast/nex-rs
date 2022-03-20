@@ -22,4 +22,16 @@ impl<'a> Client<'a> {
     pub fn get_server(&self) -> &'a Server {
         self.server
     }
+
+    pub fn get_signature_key(&self) -> &[u8] {
+        &self.signature_key
+    }
+
+    pub fn get_signature_base(&self) -> u32 {
+        self.signature_base
+    }
+
+    pub fn get_session_key(&self) -> &[u8] {
+        &self.session_key
+    }
 }

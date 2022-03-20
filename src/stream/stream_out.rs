@@ -49,7 +49,7 @@ impl<'a> StreamOut<'a> {
             .try_into()
             .expect("Length does not fit into u32");
         self.checked_write_stream_le(&len);
-        self.checked_write_stream_bytes(&value);
+        self.checked_write_stream_bytes(value);
     }
 
     pub fn write_qbuffer(&mut self, value: &[u8]) {
@@ -57,7 +57,7 @@ impl<'a> StreamOut<'a> {
             .try_into()
             .expect("String length does not fit into u16");
         self.checked_write_stream_le(&len);
-        self.checked_write_stream_bytes(&value);
+        self.checked_write_stream_bytes(value);
     }
 
     pub fn write_list<Item: EndianWrite + Default>(&mut self, value: &[Item]) {
@@ -80,7 +80,7 @@ impl<'a> StreamOut<'a> {
 
         self.checked_write_stream_le(&len);
         for item in value {
-            self.write_string(&item);
+            self.write_string(item);
         }
     }
 
@@ -92,7 +92,7 @@ impl<'a> StreamOut<'a> {
 
         self.checked_write_stream_le(&len);
         for item in value {
-            self.write_qbuffer(&item);
+            self.write_qbuffer(item);
         }
     }
 }

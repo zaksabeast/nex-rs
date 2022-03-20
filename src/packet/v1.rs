@@ -246,7 +246,7 @@ impl<'a> From<PacketV1<'a>> for Vec<u8> {
             stream.checked_write_stream_bytes(&options);
         }
 
-        if packet.packet.payload.len() > 0 {
+        if packet.packet.payload.is_empty() {
             stream.checked_write_stream_bytes(&packet.packet.payload);
         }
 

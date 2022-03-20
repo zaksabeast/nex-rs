@@ -1,18 +1,16 @@
-use crate::server::Server;
 use no_std_io::{Cursor, EndianRead, Reader, StreamContainer, StreamReader};
 
-pub struct StreamIn<'a, T: Reader> {
+pub struct StreamIn<T: Reader> {
     data: StreamContainer<T>,
-    server: Option<&'a Server>,
 }
 
-impl<'a, T: Reader> Reader for StreamIn<'a, T> {
+impl<T: Reader> Reader for StreamIn<T> {
     fn get_slice(&self) -> &[u8] {
         self.data.get_slice()
     }
 }
 
-impl<'a, T: Reader> Cursor for StreamIn<'a, T> {
+impl<T: Reader> Cursor for StreamIn<T> {
     fn get_index(&self) -> usize {
         self.data.get_index()
     }
@@ -22,11 +20,10 @@ impl<'a, T: Reader> Cursor for StreamIn<'a, T> {
     }
 }
 
-impl<'a, T: Reader> StreamIn<'a, T> {
-    pub fn new(data: T, server: Option<&'a Server>) -> Self {
+impl<T: Reader> StreamIn<T> {
+    pub fn new(data: T) -> Self {
         Self {
             data: StreamContainer::new(data),
-            server,
         }
     }
 

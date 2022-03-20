@@ -1,12 +1,10 @@
-use crate::server::Server;
 use no_std_io::{Cursor, EndianWrite, StreamContainer, StreamWriter, Writer, WriterResult};
 
-pub struct StreamOut<'a> {
+pub struct StreamOut {
     data: StreamContainer<Vec<u8>>,
-    server: &'a Server,
 }
 
-impl<'a> Writer for StreamOut<'a> {
+impl Writer for StreamOut {
     fn get_mut_slice(&mut self) -> &mut [u8] {
         self.data.get_mut_slice()
     }
@@ -16,7 +14,7 @@ impl<'a> Writer for StreamOut<'a> {
     }
 }
 
-impl<'a> Cursor for StreamOut<'a> {
+impl Cursor for StreamOut {
     fn get_index(&self) -> usize {
         self.data.get_index()
     }
@@ -26,12 +24,17 @@ impl<'a> Cursor for StreamOut<'a> {
     }
 }
 
-impl<'a> StreamOut<'a> {
-    pub fn new(server: &'a Server) -> Self {
+impl Default for StreamOut {
+    fn default() -> Self {
         Self {
             data: StreamContainer::new(vec![]),
-            server,
         }
+    }
+}
+
+impl StreamOut {
+    pub fn new() -> Self {
+        Self::default()
     }
 
     pub fn checked_write_stream_bool(&mut self, value: bool) {
@@ -101,8 +104,8 @@ impl<'a> StreamOut<'a> {
     }
 }
 
-impl<'a> From<StreamOut<'a>> for Vec<u8> {
-    fn from(stream: StreamOut<'a>) -> Self {
+impl From<StreamOut> for Vec<u8> {
+    fn from(stream: StreamOut) -> Self {
         stream.data.into_raw()
     }
 }

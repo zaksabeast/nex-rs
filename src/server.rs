@@ -91,7 +91,7 @@ impl Server {
         unimplemented!()
     }
 
-    fn acknowledge_packet<'a>(&mut self, packet: impl Packet<'a>, payload: Vec<u8>) {
+    fn acknowledge_packet(&mut self, packet: impl Packet, payload: Vec<u8>) {
         unimplemented!()
     }
 
@@ -99,15 +99,15 @@ impl Server {
         unimplemented!()
     }
 
-    fn find_client_from_pid<'a>(&self, pid: u32) -> &'a mut Client<'a> {
+    fn find_client_from_pid(&mut self, pid: u32) -> &mut Client {
         unimplemented!()
     }
 
-    fn send<'a>(&mut self, packet: impl Packet<'a>) {
+    fn send(&mut self, packet: impl Packet) {
         unimplemented!()
     }
 
-    fn send_fragment<'a>(&mut self, packet: impl Packet<'a>, fragment_id: u32) {
+    fn send_fragment(&mut self, packet: impl Packet, fragment_id: u32) {
         unimplemented!()
     }
 

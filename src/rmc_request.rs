@@ -18,7 +18,7 @@ impl TryFrom<&[u8]> for RMCRequest {
             return Err("Invalid RMCRequest size");
         }
 
-        let mut stream = StreamIn::new(bytes, None);
+        let mut stream = StreamIn::new(bytes);
 
         let size: usize = stream
             .read_stream_le::<u32>()

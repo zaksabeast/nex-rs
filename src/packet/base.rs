@@ -1,8 +1,7 @@
 use super::{PacketFlags, PacketType};
-use crate::{client::Client, rmc_request::RMCRequest};
+use crate::rmc_request::RMCRequest;
 
-pub struct BasePacket<'a> {
-    pub(super) sender: &'a mut Client<'a>,
+pub struct BasePacket {
     pub(super) data: Vec<u8>,
     pub(super) version: u8,
     pub(super) source: u8,
@@ -18,11 +17,10 @@ pub struct BasePacket<'a> {
     pub(super) rmc_request: RMCRequest,
 }
 
-impl<'a> BasePacket<'a> {
-    pub(super) fn new(client: &'a mut Client<'a>, data: Vec<u8>) -> Self {
+impl BasePacket {
+    pub(super) fn new(data: Vec<u8>) -> Self {
         Self {
             data,
-            sender: client,
             version: 0,
             source: 0,
             destination: 0,

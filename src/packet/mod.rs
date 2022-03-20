@@ -9,7 +9,7 @@ use packet_flag::{PacketFlag, PacketFlags};
 use packet_option::PacketOption;
 use packet_type::PacketType;
 
-pub trait Packet<'a> {
-    fn get_base(&self) -> &BasePacket<'a>;
-    fn get_mut_base(&mut self) -> &mut BasePacket<'a>;
+pub trait Packet {
+    fn get_base(&self) -> &BasePacket;
+    fn get_mut_base(&mut self) -> &mut BasePacket;
 }

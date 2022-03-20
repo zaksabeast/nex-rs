@@ -1,6 +1,8 @@
 use crate::{client::Client, counter::Counter, packet::Packet};
+use std::net::UdpSocket;
 
 pub struct Server {
+    socket: Option<UdpSocket>,
     access_key: String,
     prudp_version: u32,
     nex_version: u32,
@@ -19,6 +21,7 @@ pub struct Server {
 impl Default for Server {
     fn default() -> Self {
         Self {
+            socket: None,
             access_key: "".to_string(),
             nex_version: 0,
             server_version: 0,
@@ -53,12 +56,27 @@ impl Server {
         self.flags_version
     }
 
-    fn listen(&mut self, address: String) {
-        unimplemented!()
+    async fn listen(&mut self, addr: &str) -> Result<(), &'static str> {
+        let socket = UdpSocket::bind(addr).map_err(|_| "Couldn't bind to address")?;
+        self.socket = Some(socket);
+
+        loop {
+            self.handle_socket_message().await?;
+        }
     }
 
-    fn handle_socket_message(&mut self) -> Result<(), &'static str> {
-        unimplemented!()
+    async fn handle_socket_message(&mut self) -> Result<(), &'static str> {
+        let mut buf: Vec<u8> = vec![];
+        let socket = match &self.socket {
+            Some(socket) => Ok(socket),
+            None => Err("No socket"),
+        }?;
+
+        let (receive_size, peer) = socket
+            .recv_from(&mut buf)
+            .map_err(|_| "UDP Receive error")?;
+
+        Ok(())
     }
 
     fn client_connected(&mut self, client: &mut Client) -> bool {

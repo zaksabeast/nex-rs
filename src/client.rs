@@ -1,4 +1,4 @@
-use crate::server::Server;
+use crate::{counter::Counter, server::Server};
 use arc4::Arc4;
 
 pub struct Client<'a> {
@@ -16,6 +16,8 @@ pub struct Client<'a> {
     local_station_url: String,
     connection_id: u32,
     connected: bool,
+    sequence_id_in: Counter,
+    sequence_id_out: Counter,
 }
 
 impl<'a> Client<'a> {
@@ -35,6 +37,8 @@ impl<'a> Client<'a> {
             local_station_url: "".to_string(),
             connection_id: 0,
             connected: false,
+            sequence_id_in: Counter::default(),
+            sequence_id_out: Counter::default(),
         }
     }
 

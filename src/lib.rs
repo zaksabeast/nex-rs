@@ -4,6 +4,7 @@
 #![allow(unused_variables)]
 
 mod client;
+mod counter;
 mod packet;
 mod rmc_request;
 mod server;

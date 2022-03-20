@@ -1,6 +1,4 @@
-use crate::{client::Client, packet::Packet};
-
-struct Counter(u32);
+use crate::{client::Client, counter::Counter, packet::Packet};
 
 #[derive(Default)]
 pub struct Server {
@@ -16,6 +14,7 @@ pub struct Server {
     kerberos_key_size: u32,
     kerberos_key_derivation: u32,
     server_version: u32,
+    connection_id_counter: Counter,
 }
 
 impl Server {

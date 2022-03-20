@@ -9,10 +9,10 @@ edition = "2021"
 mocktopus = "0.7.11"
 
 [dependencies]
-arc4 = "0.1.0"
 hmac = "0.12.1"
 md-5 = "0.10.1"
 no_std_io = { git = "https://github.com/zaksabeast/no_std_io.git", rev = "ec8bf48" }
 num_enum = { version = "0.5", default-features = false }
+rust-crypto = "0.2.36"
 safe-transmute = { version = "0.11", default-features = false }
 tokio = "1.17.0"

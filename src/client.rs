@@ -1,10 +1,9 @@
-use crate::{counter::Counter, server::Server};
-use arc4::Arc4;
+use crate::{counter::Counter, rc4::Rc4, server::Server};
 
 pub struct Client<'a> {
     server: &'a mut Server,
-    cipher: Arc4<'a>,
-    decipher: Arc4<'a>,
+    cipher: Rc4,
+    decipher: Rc4,
     signature_key: Vec<u8>,
     signature_base: u32,
     secure_key: Vec<u8>,
@@ -24,8 +23,8 @@ impl<'a> Client<'a> {
     pub fn new(server: &'a mut Server) -> Self {
         Self {
             server,
-            cipher: Arc4::with_key(&[0]),
-            decipher: Arc4::with_key(&[0]),
+            cipher: Rc4::new(&[0]),
+            decipher: Rc4::new(&[0]),
             signature_key: vec![],
             signature_base: 0,
             secure_key: vec![],
@@ -50,11 +49,11 @@ impl<'a> Client<'a> {
         self.server.set_nex_version(nex_version);
     }
 
-    pub fn get_cipher(&mut self) -> &mut Arc4<'a> {
+    pub fn get_cipher(&mut self) -> &mut Rc4 {
         &mut self.cipher
     }
 
-    pub fn get_decipher(&mut self) -> &mut Arc4<'a> {
+    pub fn get_decipher(&mut self) -> &mut Rc4 {
         &mut self.decipher
     }
 

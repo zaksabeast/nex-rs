@@ -106,7 +106,8 @@ impl<'a> PacketV1<'a> {
 
             if self.packet.packet_type == PacketType::Data && !self.packet.flags.multi_ack() {
                 let decipher = self.packet.sender.get_decipher();
-                decipher.encrypt(&mut self.packet.payload);
+                let out: Vec<u8> = vec![0; payload_size];
+                self.packet.payload = decipher.decrypt(&self.packet.payload)?;
                 self.packet.rmc_request = self.packet.payload.as_slice().try_into()?;
             }
         }
@@ -228,7 +229,9 @@ impl<'a> From<PacketV1<'a>> for Vec<u8> {
 
                 if payload_len > 0 {
                     let cipher = packet.packet.sender.get_cipher();
-                    cipher.encrypt(&mut packet.packet.payload);
+                    packet.packet.payload = cipher
+                        .encrypt(&packet.packet.payload)
+                        .expect("Encrypt failed");
                 }
             }
 

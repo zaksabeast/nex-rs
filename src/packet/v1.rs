@@ -1,8 +1,8 @@
 use super::{Packet, PacketFlags, PacketOption, PacketType};
-use crate::stream::StreamIn;
+use crate::stream::{StreamIn, StreamOut};
 use hmac::{Hmac, Mac};
 use md5::Md5;
-use no_std_io::{Cursor, StreamContainer, StreamReader};
+use no_std_io::{Cursor, StreamContainer, StreamReader, StreamWriter};
 
 pub struct PacketV1<'a> {
     packet: Packet<'a>,
@@ -135,7 +135,35 @@ impl<'a> PacketV1<'a> {
     }
 
     pub fn encode_options(&self) -> Vec<u8> {
-        unimplemented!()
+        let mut stream = StreamOut::new(self.packet.sender.get_server());
+
+        if self.packet.packet_type == PacketType::Syn
+            || self.packet.packet_type == PacketType::Connect
+        {
+            stream.checked_write_stream::<u8>(&u8::from(PacketOption::SupportedFunctions));
+            stream.checked_write_stream(&4u8);
+            stream.checked_write_stream(&self.supported_functions);
+
+            stream.checked_write_stream::<u8>(&u8::from(PacketOption::ConnectionSignature));
+            stream.checked_write_stream(&16u8);
+            stream.checked_write_stream_bytes(&self.packet.connection_signature);
+
+            if self.packet.packet_type == PacketType::Connect {
+                stream.checked_write_stream::<u8>(&u8::from(PacketOption::InitialSequenceId));
+                stream.checked_write_stream(&2u8);
+                stream.checked_write_stream(&self.initial_sequence_id);
+            }
+
+            stream.checked_write_stream::<u8>(&u8::from(PacketOption::MaxSubstreamId));
+            stream.checked_write_stream(&1u8);
+            stream.checked_write_stream(&self.maximum_substream_id);
+        } else if self.packet.packet_type == PacketType::Data {
+            stream.checked_write_stream::<u8>(&u8::from(PacketOption::FragmentId));
+            stream.checked_write_stream(&1u8);
+            stream.checked_write_stream(&self.packet.fragment_id);
+        }
+
+        stream.into()
     }
 
     pub fn calculate_signature(

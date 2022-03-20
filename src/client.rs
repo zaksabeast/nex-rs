@@ -69,4 +69,40 @@ impl<'a> Client<'a> {
     pub fn get_session_key(&self) -> &[u8] {
         &self.session_key
     }
+
+    fn reset() {
+        unimplemented!();
+    }
+
+    fn address() -> String {
+        unimplemented!();
+    }
+
+    fn server() -> Server {
+        unimplemented!();
+    }
+
+    fn update_rc4_key(rc4_key: Vec<u8>) {
+        unimplemented!();
+    }
+
+    fn update_access_key(access_key: String) {
+        unimplemented!();
+    }
+
+    fn signature_base() -> u32 {
+        unimplemented!();
+    }
+
+    fn signature_key() -> Vec<u8> {
+        unimplemented!();
+    }
+
+    fn increase_ping_timeout_time(seconds: u32) {
+        unimplemented!();
+    }
+
+    fn start_timeout_timer() {
+        unimplemented!();
+    }
 }

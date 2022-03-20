@@ -1,18 +1,18 @@
 use crate::server::Server;
 use no_std_io::{Cursor, EndianRead, Reader, StreamContainer, StreamReader};
 
-pub struct StreamIn<'a> {
-    data: StreamContainer<Vec<u8>>,
+pub struct StreamIn<'a, T: Reader> {
+    data: StreamContainer<T>,
     server: &'a Server,
 }
 
-impl<'a> Reader for StreamIn<'a> {
+impl<'a, T: Reader> Reader for StreamIn<'a, T> {
     fn get_slice(&self) -> &[u8] {
         self.data.get_slice()
     }
 }
 
-impl<'a> Cursor for StreamIn<'a> {
+impl<'a, T: Reader> Cursor for StreamIn<'a, T> {
     fn get_index(&self) -> usize {
         self.data.get_index()
     }
@@ -22,8 +22,8 @@ impl<'a> Cursor for StreamIn<'a> {
     }
 }
 
-impl<'a> StreamIn<'a> {
-    pub fn new(data: Vec<u8>, server: &'a Server) -> Self {
+impl<'a, T: Reader> StreamIn<'a, T> {
+    pub fn new(data: T, server: &'a Server) -> Self {
         Self {
             data: StreamContainer::new(data),
             server,
@@ -50,7 +50,7 @@ impl<'a> StreamIn<'a> {
         self.default_read_byte_stream(length.into())
     }
 
-    pub fn read_list<T: EndianRead + Default>(&mut self) -> Vec<T> {
+    pub fn read_list<Item: EndianRead + Default>(&mut self) -> Vec<Item> {
         let length: u32 = self.default_read_stream_le();
         let mut list = Vec::with_capacity(length.try_into().expect("Invalid buffer size"));
 

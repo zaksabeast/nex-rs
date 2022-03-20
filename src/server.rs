@@ -17,4 +17,8 @@ impl Server {
     pub fn get_checksum_version(&self) -> u32 {
         self.checksum_version
     }
+
+    pub fn get_flags_version(&self) -> u32 {
+        self.flags_version
+    }
 }

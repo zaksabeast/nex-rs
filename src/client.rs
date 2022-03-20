@@ -23,6 +23,14 @@ impl<'a> Client<'a> {
         self.server
     }
 
+    pub fn get_cipher(&mut self) -> &mut Arc4<'a> {
+        &mut self.cipher
+    }
+
+    pub fn get_decipher(&mut self) -> &mut Arc4<'a> {
+        &mut self.decipher
+    }
+
     pub fn get_signature_key(&self) -> &[u8] {
         &self.signature_key
     }

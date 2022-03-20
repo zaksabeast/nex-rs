@@ -4,12 +4,12 @@ mod packet_type;
 mod v1;
 
 use crate::{client::Client, rmc_request::RMCRequest};
-use packet_flag::PacketFlags;
+use packet_flag::{PacketFlag, PacketFlags};
 use packet_option::PacketOption;
 use packet_type::PacketType;
 
 pub struct Packet<'a> {
-    sender: &'a Client<'a>,
+    sender: &'a mut Client<'a>,
     data: Vec<u8>,
     version: u8,
     source: u8,
@@ -26,7 +26,7 @@ pub struct Packet<'a> {
 }
 
 impl<'a> Packet<'a> {
-    fn new(client: &'a Client<'a>, data: Vec<u8>) -> Self {
+    fn new(client: &'a mut Client<'a>, data: Vec<u8>) -> Self {
         Self {
             data,
             sender: client,

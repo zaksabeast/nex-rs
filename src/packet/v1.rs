@@ -1,4 +1,4 @@
-use super::{Packet, PacketFlags, PacketOption, PacketType};
+use super::{Packet, PacketFlag, PacketFlags, PacketOption, PacketType};
 use crate::stream::{StreamIn, StreamOut};
 use hmac::{Hmac, Mac};
 use md5::Md5;
@@ -75,17 +75,12 @@ impl<'a> PacketV1<'a> {
 
             self.packet.payload = stream.default_read_byte_stream(payload_size);
 
-            if self.packet.packet_type == PacketType::Data && self.packet.flags.multi_ack() {
+            if self.packet.packet_type == PacketType::Data && !self.packet.flags.multi_ack() {
                 unimplemented!()
             }
         }
 
-        let calculated_signature = self.calculate_signature(
-            &self.packet.data[2..14],
-            &self.packet.connection_signature,
-            &options,
-            &self.packet.payload,
-        );
+        let calculated_signature = self.calculate_signature(&options);
 
         if calculated_signature == self.packet.signature {
             return Err("Calculated signature did not match");
@@ -166,13 +161,10 @@ impl<'a> PacketV1<'a> {
         stream.into()
     }
 
-    pub fn calculate_signature(
-        &self,
-        header: &[u8],
-        connection_signature: &[u8],
-        options: &[u8],
-        payload: &[u8],
-    ) -> Vec<u8> {
+    pub fn calculate_signature(&self, options: &[u8]) -> Vec<u8> {
+        let header = &self.packet.data[6..14];
+        let connection_signature = &self.packet.connection_signature;
+        let payload = &self.packet.payload;
         let key = self.packet.sender.get_signature_key();
         let signature_base = self.packet.sender.get_signature_base();
 
@@ -184,5 +176,69 @@ impl<'a> PacketV1<'a> {
         mac.update(options);
         mac.update(payload);
         mac.finalize().into_bytes().to_vec()
+    }
+}
+
+impl<'a> From<PacketV1<'a>> for Vec<u8> {
+    fn from(mut packet: PacketV1<'a>) -> Vec<u8> {
+        if packet.packet.packet_type == PacketType::Data {
+            if !packet.packet.flags.multi_ack() {
+                let payload_len = packet.packet.payload.len();
+
+                if payload_len > 0 {
+                    let cipher = packet.packet.sender.get_cipher();
+                    cipher.encrypt(&mut packet.packet.payload);
+                }
+            }
+
+            if !packet.packet.flags.has_size() {
+                packet.packet.flags |= PacketFlag::HasSize;
+            }
+        }
+
+        let type_flags: u16 = if packet.packet.sender.get_server().get_flags_version() == 0 {
+            u16::from(packet.packet.packet_type) | u16::from(packet.packet.flags) << 3
+        } else {
+            u16::from(packet.packet.packet_type) | u16::from(packet.packet.flags) << 4
+        };
+
+        let mut stream = StreamOut::new(packet.packet.sender.get_server());
+
+        stream.checked_write_stream_le(&0xd0eau16); // v1 magic
+        stream.checked_write_stream(&1u8);
+
+        let options = packet.encode_options();
+        let options_len: u8 = options
+            .len()
+            .try_into()
+            .expect("Options length is too large");
+        let payload_len: u16 = packet
+            .packet
+            .payload
+            .len()
+            .try_into()
+            .expect("Payload length is too large");
+
+        stream.checked_write_stream(&options_len);
+        stream.checked_write_stream_le(&payload_len);
+        stream.checked_write_stream(&packet.packet.source);
+        stream.checked_write_stream(&packet.packet.destination);
+        stream.checked_write_stream(&type_flags);
+        stream.checked_write_stream(&packet.packet.session_id);
+        stream.checked_write_stream(&packet.substream_id);
+        stream.checked_write_stream(&packet.packet.sequence_id);
+
+        let signature = packet.calculate_signature(&options);
+        stream.checked_write_stream_bytes(&signature);
+
+        if options_len > 0 {
+            stream.checked_write_stream_bytes(&options);
+        }
+
+        if packet.packet.payload.len() > 0 {
+            stream.checked_write_stream_bytes(&packet.packet.payload);
+        }
+
+        stream.into()
     }
 }

@@ -1,5 +1,5 @@
 use num_enum::{IntoPrimitive, TryFromPrimitive};
-use std::ops::BitAnd;
+use std::ops::{BitAnd, BitOrAssign};
 
 #[derive(Debug, Clone, Copy, PartialEq, TryFromPrimitive, IntoPrimitive)]
 #[repr(u16)]
@@ -19,6 +19,12 @@ impl BitAnd<u16> for PacketFlag {
     }
 }
 
+impl BitOrAssign<PacketFlag> for PacketFlags {
+    fn bitor_assign(&mut self, rhs: PacketFlag) {
+        self.0 |= u16::from(rhs);
+    }
+}
+
 impl BitAnd<PacketFlag> for u16 {
     type Output = u16;
 
@@ -27,6 +33,7 @@ impl BitAnd<PacketFlag> for u16 {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct PacketFlags(u16);
 
 impl PacketFlags {
@@ -52,5 +59,11 @@ impl PacketFlags {
 
     pub fn multi_ack(&self) -> bool {
         self.0 & PacketFlag::MultiAck != 0
+    }
+}
+
+impl From<PacketFlags> for u16 {
+    fn from(flags: PacketFlags) -> Self {
+        flags.0
     }
 }

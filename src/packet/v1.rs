@@ -1,4 +1,4 @@
-use super::{Packet, PacketFlag, PacketFlags, PacketOption, PacketType};
+use super::{BasePacket, Packet, PacketFlag, PacketFlags, PacketOption, PacketType};
 use crate::{
     client::Client,
     stream::{StreamIn, StreamOut},
@@ -8,7 +8,7 @@ use md5::Md5;
 use no_std_io::{Cursor, StreamContainer, StreamReader, StreamWriter};
 
 pub struct PacketV1<'a> {
-    packet: Packet<'a>,
+    packet: BasePacket<'a>,
     magic: u16,
     pub substream_id: u8,
     pub supported_functions: u32,
@@ -16,12 +16,22 @@ pub struct PacketV1<'a> {
     pub maximum_substream_id: u8,
 }
 
+impl<'a> Packet<'a> for PacketV1<'a> {
+    fn get_base(&self) -> &BasePacket<'a> {
+        &self.packet
+    }
+
+    fn get_mut_base(&mut self) -> &mut BasePacket<'a> {
+        &mut self.packet
+    }
+}
+
 impl<'a> PacketV1<'a> {
     pub fn new(client: &'a mut Client<'a>, data: Vec<u8>) -> Result<Self, &'static str> {
         let data_len = data.len();
 
         let mut packet = Self {
-            packet: Packet::new(client, data),
+            packet: BasePacket::new(client, data),
             magic: 0,
             substream_id: 0,
             supported_functions: 0,

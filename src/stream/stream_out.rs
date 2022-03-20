@@ -1,5 +1,5 @@
 use crate::server::Server;
-use no_std_io::{Cursor, EndianWrite, StreamContainer, StreamWriter, Writer};
+use no_std_io::{Cursor, EndianWrite, StreamContainer, StreamWriter, Writer, WriterResult};
 
 pub struct StreamOut<'a> {
     data: StreamContainer<Vec<u8>>,
@@ -9,6 +9,10 @@ pub struct StreamOut<'a> {
 impl<'a> Writer for StreamOut<'a> {
     fn get_mut_slice(&mut self) -> &mut [u8] {
         self.data.get_mut_slice()
+    }
+
+    fn get_sized_mut_slice(&mut self, offset: usize, length: usize) -> WriterResult<&mut [u8]> {
+        self.data.get_sized_mut_slice(offset, length)
     }
 }
 

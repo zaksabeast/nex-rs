@@ -1,5 +1,5 @@
 use num_enum::{IntoPrimitive, TryFromPrimitive};
-use std::ops::{BitAnd, BitOrAssign};
+use std::ops::{BitAnd, BitAndAssign, BitOrAssign};
 
 #[derive(Debug, Clone, Copy, PartialEq, TryFromPrimitive, IntoPrimitive)]
 #[repr(u16)]
@@ -16,6 +16,18 @@ impl BitAnd<u16> for PacketFlag {
 
     fn bitand(self, rhs: u16) -> Self::Output {
         (self as u16) & rhs
+    }
+}
+
+impl BitAndAssign<PacketFlag> for u16 {
+    fn bitand_assign(&mut self, rhs: PacketFlag) {
+        *self &= u16::from(rhs);
+    }
+}
+
+impl BitOrAssign<PacketFlag> for u16 {
+    fn bitor_assign(&mut self, rhs: PacketFlag) {
+        *self |= u16::from(rhs);
     }
 }
 
@@ -60,10 +72,41 @@ impl PacketFlags {
     pub fn multi_ack(&self) -> bool {
         self.0 & PacketFlag::MultiAck != 0
     }
+
+    pub fn set_flag(&mut self, flag: PacketFlag) {
+        self.0 |= flag;
+    }
+
+    pub fn clear_flag(&mut self, flag: PacketFlag) {
+        self.0 &= !u16::from(flag);
+    }
+
+    pub fn clear_flags(&mut self) {
+        self.0 = 0;
+    }
 }
 
 impl From<PacketFlags> for u16 {
     fn from(flags: PacketFlags) -> Self {
         flags.0
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn should_set_flag() {
+        let mut flags = PacketFlags(0);
+        flags.set_flag(PacketFlag::NeedsAck);
+        assert_eq!(flags, PacketFlags(PacketFlag::NeedsAck as u16));
+    }
+
+    #[test]
+    fn should_clear_flag() {
+        let mut flags = PacketFlags(PacketFlag::NeedsAck as u16);
+        flags.clear_flag(PacketFlag::NeedsAck);
+        assert_eq!(flags, PacketFlags(0));
     }
 }

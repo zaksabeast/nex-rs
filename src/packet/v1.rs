@@ -1,5 +1,8 @@
 use super::{Packet, PacketFlag, PacketFlags, PacketOption, PacketType};
-use crate::stream::{StreamIn, StreamOut};
+use crate::{
+    client::Client,
+    stream::{StreamIn, StreamOut},
+};
 use hmac::{Hmac, Mac};
 use md5::Md5;
 use no_std_io::{Cursor, StreamContainer, StreamReader, StreamWriter};
@@ -14,9 +17,31 @@ pub struct PacketV1<'a> {
 }
 
 impl<'a> PacketV1<'a> {
-    fn decode(&mut self, data: &[u8]) -> Result<(), &'static str> {
+    pub fn new(client: &'a mut Client<'a>, data: Vec<u8>) -> Result<Self, &'static str> {
+        let data_len = data.len();
+
+        let mut packet = Self {
+            packet: Packet::new(client, data),
+            magic: 0,
+            substream_id: 0,
+            supported_functions: 0,
+            initial_sequence_id: 0,
+            maximum_substream_id: 0,
+        };
+
+        if data_len > 0 {
+            packet.decode()?;
+        }
+
+        Ok(packet)
+    }
+
+    fn decode(&mut self) -> Result<(), &'static str> {
+        let data_len = self.packet.data.len();
+        let data = self.packet.data.as_slice();
+
         // magic + header + signature
-        if data.len() < 30 {
+        if data_len < 30 {
             return Err("Packet length is too small!");
         }
 
@@ -60,38 +85,29 @@ impl<'a> PacketV1<'a> {
         self.packet.sequence_id = stream.default_read_stream();
         self.packet.signature = stream.default_read_byte_stream(16);
 
-        if self.packet.data.len() < stream.get_index() + options_length {
+        if data_len < stream.get_index() + options_length {
             return Err("Packet specific data size does not match");
         }
 
         let options = stream.default_read_byte_stream(options_length);
-        self.decode_options(&options)
-            .map_err(|_| "Invalid packet options")?;
 
         if payload_size > 0 {
-            if self.packet.data.len() < stream.get_index() + payload_size {
-                return Err("Packet data length less than payload length");
-            }
-
             self.packet.payload = stream.default_read_byte_stream(payload_size);
 
             if self.packet.packet_type == PacketType::Data && !self.packet.flags.multi_ack() {
                 let decipher = self.packet.sender.get_decipher();
                 decipher.encrypt(&mut self.packet.payload);
-                self.packet.rmc_request = self
-                    .packet
-                    .payload
-                    .as_slice()
-                    .try_into()
-                    .map_err(|_| "Invalid RMCRequest from packet")?;
+                self.packet.rmc_request = self.packet.payload.as_slice().try_into()?;
             }
         }
 
-        let calculated_signature = self.calculate_signature(&options);
+        let calculated_signature = self.calculate_signature(&options)?;
 
         if calculated_signature == self.packet.signature {
             return Err("Calculated signature did not match");
         }
+
+        self.decode_options(&options)?;
 
         Ok(())
     }
@@ -172,21 +188,25 @@ impl<'a> PacketV1<'a> {
         stream.into()
     }
 
-    pub fn calculate_signature(&self, options: &[u8]) -> Vec<u8> {
+    pub fn calculate_signature(&self, options: &[u8]) -> Result<Vec<u8>, &'static str> {
+        if self.packet.data.len() < 14 {
+            return Err("Packet data length is too small");
+        }
+
         let header = &self.packet.data[6..14];
         let connection_signature = &self.packet.connection_signature;
         let payload = &self.packet.payload;
         let key = self.packet.sender.get_signature_key();
         let signature_base = self.packet.sender.get_signature_base();
 
-        let mut mac = Hmac::<Md5>::new_from_slice(key).expect("Invalid hamc key size");
+        let mut mac = Hmac::<Md5>::new_from_slice(key).map_err(|_| "Invalid hamc key size")?;
         mac.update(&header[4..]);
         mac.update(self.packet.sender.get_session_key());
         mac.update(&signature_base.to_le_bytes());
         mac.update(connection_signature);
         mac.update(options);
         mac.update(payload);
-        mac.finalize().into_bytes().to_vec()
+        Ok(mac.finalize().into_bytes().to_vec())
     }
 }
 
@@ -239,17 +259,314 @@ impl<'a> From<PacketV1<'a>> for Vec<u8> {
         stream.checked_write_stream(&packet.substream_id);
         stream.checked_write_stream(&packet.packet.sequence_id);
 
-        let signature = packet.calculate_signature(&options);
+        let signature = packet
+            .calculate_signature(&options)
+            .expect("Signature could not be calculated");
         stream.checked_write_stream_bytes(&signature);
 
         if options_len > 0 {
             stream.checked_write_stream_bytes(&options);
         }
 
-        if packet.packet.payload.is_empty() {
+        if !packet.packet.payload.is_empty() {
             stream.checked_write_stream_bytes(&packet.packet.payload);
         }
 
         stream.into()
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::server::Server;
+
+    const BASE_PACKET: [u8; 57] = [
+        0xea, 0xd0, 0x01, 0x1b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x8a,
+        0xb1, 0x6d, 0x53, 0x40, 0x5d, 0xf1, 0xa0, 0xc8, 0x9a, 0xdd, 0x37, 0xe3, 0xcf, 0xf5, 0xaa,
+        0x00, 0x04, 0x00, 0x00, 0x00, 0x00, 0x01, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04, 0x01, 0x00,
+    ];
+
+    #[test]
+    fn should_encode_and_decode() {
+        let bytes = BASE_PACKET.to_vec();
+
+        let mut server = Server::new();
+        let mut client = Client::new(&mut server);
+
+        let packet = PacketV1::new(&mut client, bytes.clone()).expect("Should have succeeded!");
+
+        let result: Vec<u8> = packet.into();
+        assert_eq!(result, bytes);
+    }
+
+    mod syn {
+        use super::*;
+
+        #[test]
+        fn should_decode_packet() {
+            let bytes = vec![
+                0xea, 0xd0, 0x01, 0x1b, 0x00, 0x00, 0x00, 0x00, 0xc0, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x8e, 0x8a, 0xa3, 0x5e, 0xda, 0xe9, 0xe6, 0xfc, 0xc9, 0xa0, 0xcc, 0xdc, 0x7e, 0x9c,
+                0x88, 0x81, 0x00, 0x04, 0x04, 0x00, 0x00, 0x00, 0x01, 0x10, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04, 0x01,
+                0x01,
+            ];
+
+            let mut server = Server::new();
+            let mut client = Client::new(&mut server);
+
+            let packet = PacketV1::new(&mut client, bytes.clone()).expect("Should have succeeded!");
+
+            assert_eq!(packet.packet.packet_type, PacketType::Syn);
+            assert_eq!(packet.packet.flags.needs_ack(), true);
+            assert_eq!(packet.packet.flags.has_size(), true);
+            assert_eq!(packet.supported_functions, 4);
+            assert_eq!(packet.maximum_substream_id, 1);
+        }
+
+        #[test]
+        fn should_encode_packet() {
+            let bytes = BASE_PACKET.to_vec();
+
+            let mut server = Server::new();
+            let mut client = Client::new(&mut server);
+
+            let mut packet = PacketV1::new(&mut client, bytes).expect("Should have succeeded!");
+            packet.packet.packet_type = PacketType::Syn;
+            packet.packet.flags.clear_flags();
+            packet.packet.flags.set_flag(PacketFlag::NeedsAck);
+            packet.packet.flags.set_flag(PacketFlag::HasSize);
+            packet.supported_functions = 4;
+            packet.maximum_substream_id = 1;
+
+            let result: Vec<u8> = packet.into();
+            let expected_result = vec![
+                0xea, 0xd0, 0x01, 0x1b, 0x00, 0x00, 0x00, 0x00, 0xc0, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x8e, 0x8a, 0xa3, 0x5e, 0xda, 0xe9, 0xe6, 0xfc, 0xc9, 0xa0, 0xcc, 0xdc, 0x7e, 0x9c,
+                0x88, 0x81, 0x00, 0x04, 0x04, 0x00, 0x00, 0x00, 0x01, 0x10, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04, 0x01,
+                0x01,
+            ];
+            assert_eq!(result, expected_result);
+        }
+    }
+
+    mod connect {
+        use super::*;
+
+        #[test]
+        fn should_decode_packet() {
+            let bytes = vec![
+                0xea, 0xd0, 0x01, 0x1f, 0x01, 0x00, 0x00, 0x00, 0xe1, 0x00, 0x01, 0x00, 0x00, 0x00,
+                0x28, 0x66, 0xa0, 0x43, 0x3c, 0xcd, 0x20, 0xcb, 0xac, 0x2f, 0x29, 0x68, 0x5f, 0x90,
+                0x97, 0x75, 0x00, 0x04, 0x04, 0x00, 0x00, 0x00, 0x01, 0x10, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03, 0x02,
+                0xcd, 0xab, 0x04, 0x01, 0x00, 0xaa,
+            ];
+
+            let mut server = Server::new();
+            let mut client = Client::new(&mut server);
+
+            let packet = PacketV1::new(&mut client, bytes.clone()).expect("Should have succeeded!");
+
+            assert_eq!(packet.packet.packet_type, PacketType::Connect);
+            assert_eq!(packet.packet.flags.reliable(), true);
+            assert_eq!(packet.packet.flags.needs_ack(), true);
+            assert_eq!(packet.packet.flags.has_size(), true);
+            assert_eq!(packet.supported_functions, 4);
+            assert_eq!(packet.maximum_substream_id, 0);
+            assert_eq!(packet.initial_sequence_id, 0xabcd);
+            assert_eq!(packet.packet.payload, vec![0xaa]);
+            assert_eq!(packet.packet.session_id, 1);
+        }
+
+        #[test]
+        fn should_encode_packet() {
+            let bytes = BASE_PACKET.to_vec();
+
+            let mut server = Server::new();
+            let mut client = Client::new(&mut server);
+
+            let mut packet = PacketV1::new(&mut client, bytes).expect("Should have succeeded!");
+            packet.packet.packet_type = PacketType::Connect;
+            packet.packet.flags.clear_flags();
+            packet.packet.flags.set_flag(PacketFlag::Reliable);
+            packet.packet.flags.set_flag(PacketFlag::NeedsAck);
+            packet.packet.flags.set_flag(PacketFlag::HasSize);
+            packet.supported_functions = 4;
+            packet.maximum_substream_id = 0;
+            packet.initial_sequence_id = 0xabcd;
+            packet.packet.payload = vec![0xaa];
+            packet.packet.session_id = 1;
+
+            let result: Vec<u8> = packet.into();
+            let expected_result = vec![
+                0xea, 0xd0, 0x01, 0x1f, 0x01, 0x00, 0x00, 0x00, 0xe1, 0x00, 0x01, 0x00, 0x00, 0x00,
+                0x28, 0x66, 0xa0, 0x43, 0x3c, 0xcd, 0x20, 0xcb, 0xac, 0x2f, 0x29, 0x68, 0x5f, 0x90,
+                0x97, 0x75, 0x00, 0x04, 0x04, 0x00, 0x00, 0x00, 0x01, 0x10, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03, 0x02,
+                0xcd, 0xab, 0x04, 0x01, 0x00, 0xaa,
+            ];
+            assert_eq!(result, expected_result);
+        }
+    }
+
+    mod data {
+        use super::*;
+
+        #[test]
+        fn should_decode_packet() {
+            let bytes = vec![
+                0xea, 0xd0, 0x01, 0x03, 0x11, 0x00, 0x00, 0x00, 0xe2, 0x00, 0x01, 0x00, 0x00, 0x00,
+                0x1f, 0x9a, 0x3b, 0xb2, 0x89, 0x33, 0x50, 0x16, 0x4e, 0x79, 0xdd, 0x12, 0xd1, 0xcd,
+                0xd4, 0xda, 0x02, 0x01, 0x00, 0xd3, 0x18, 0x89, 0x41, 0x09, 0x36, 0x5c, 0x3b, 0x8b,
+                0x04, 0x1c, 0x65, 0x55, 0x6d, 0x91, 0x6e, 0xc4,
+            ];
+
+            let mut server = Server::new();
+            let mut client = Client::new(&mut server);
+
+            let packet = PacketV1::new(&mut client, bytes.clone()).expect("Should have succeeded!");
+
+            assert_eq!(packet.packet.packet_type, PacketType::Data);
+            assert_eq!(packet.packet.flags.reliable(), true);
+            assert_eq!(packet.packet.flags.needs_ack(), true);
+            assert_eq!(packet.packet.flags.has_size(), true);
+            assert_eq!(packet.packet.session_id, 1);
+            assert_eq!(packet.packet.fragment_id, 0);
+            assert_eq!(
+                packet.packet.payload,
+                vec![
+                    0x0d, 0x00, 0x00, 0x00, 0xaa, 0x01, 0x01, 0x01, 0x01, 0x02, 0x02, 0x02, 0x02,
+                    0x03, 0x03, 0x03, 0x03,
+                ]
+            );
+        }
+
+        #[test]
+        fn should_encode_packet() {
+            let bytes = BASE_PACKET.to_vec();
+
+            let mut server = Server::new();
+            let mut client = Client::new(&mut server);
+
+            let mut packet = PacketV1::new(&mut client, bytes).expect("Should have succeeded!");
+            packet.packet.packet_type = PacketType::Data;
+            packet.packet.flags.clear_flags();
+            packet.packet.flags.set_flag(PacketFlag::Reliable);
+            packet.packet.flags.set_flag(PacketFlag::NeedsAck);
+            packet.packet.flags.set_flag(PacketFlag::HasSize);
+            packet.packet.session_id = 1;
+            packet.packet.fragment_id = 0;
+            packet.packet.payload = vec![
+                0x0d, 0x00, 0x00, 0x00, 0xaa, 0x01, 0x01, 0x01, 0x01, 0x02, 0x02, 0x02, 0x02, 0x03,
+                0x03, 0x03, 0x03,
+            ];
+
+            let result: Vec<u8> = packet.into();
+            let expected_result = vec![
+                0xea, 0xd0, 0x01, 0x03, 0x11, 0x00, 0x00, 0x00, 0xe2, 0x00, 0x01, 0x00, 0x00, 0x00,
+                0x1f, 0x9a, 0x3b, 0xb2, 0x89, 0x33, 0x50, 0x16, 0x4e, 0x79, 0xdd, 0x12, 0xd1, 0xcd,
+                0xd4, 0xda, 0x02, 0x01, 0x00, 0xd3, 0x18, 0x89, 0x41, 0x09, 0x36, 0x5c, 0x3b, 0x8b,
+                0x04, 0x1c, 0x65, 0x55, 0x6d, 0x91, 0x6e, 0xc4,
+            ];
+            assert_eq!(result, expected_result);
+        }
+    }
+
+    mod disconnect {
+        use super::*;
+
+        #[test]
+        fn should_decode_packet() {
+            let bytes = vec![
+                0xea, 0xd0, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0xe3, 0x00, 0x01, 0x00, 0x00, 0x00,
+                0x10, 0xa3, 0x3d, 0xac, 0x5f, 0x58, 0x97, 0x3f, 0x8e, 0x83, 0xb7, 0x23, 0x16, 0xde,
+                0xc8, 0x47,
+            ];
+
+            let mut server = Server::new();
+            let mut client = Client::new(&mut server);
+
+            let packet = PacketV1::new(&mut client, bytes.clone()).expect("Should have succeeded!");
+
+            assert_eq!(packet.packet.packet_type, PacketType::Disconnect);
+            assert_eq!(packet.packet.flags.reliable(), true);
+            assert_eq!(packet.packet.flags.needs_ack(), true);
+            assert_eq!(packet.packet.flags.has_size(), true);
+            assert_eq!(packet.packet.session_id, 1);
+        }
+
+        #[test]
+        fn should_encode_packet() {
+            let bytes = BASE_PACKET.to_vec();
+
+            let mut server = Server::new();
+            let mut client = Client::new(&mut server);
+
+            let mut packet = PacketV1::new(&mut client, bytes).expect("Should have succeeded!");
+            packet.packet.packet_type = PacketType::Disconnect;
+            packet.packet.flags.clear_flags();
+            packet.packet.flags.set_flag(PacketFlag::Reliable);
+            packet.packet.flags.set_flag(PacketFlag::NeedsAck);
+            packet.packet.flags.set_flag(PacketFlag::HasSize);
+            packet.packet.session_id = 1;
+
+            let result: Vec<u8> = packet.into();
+            let expected_result = vec![
+                0xea, 0xd0, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0xe3, 0x00, 0x01, 0x00, 0x00, 0x00,
+                0x10, 0xa3, 0x3d, 0xac, 0x5f, 0x58, 0x97, 0x3f, 0x8e, 0x83, 0xb7, 0x23, 0x16, 0xde,
+                0xc8, 0x47,
+            ];
+            assert_eq!(result, expected_result);
+        }
+    }
+
+    mod ping {
+        use super::*;
+
+        #[test]
+        fn should_decode_packet() {
+            let bytes = vec![
+                0xea, 0xd0, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0xc4, 0x00, 0x01, 0x00, 0x00, 0x00,
+                0x10, 0xa3, 0x3d, 0xac, 0x5f, 0x58, 0x97, 0x3f, 0x8e, 0x83, 0xb7, 0x23, 0x16, 0xde,
+                0xc8, 0x47,
+            ];
+
+            let mut server = Server::new();
+            let mut client = Client::new(&mut server);
+
+            let packet = PacketV1::new(&mut client, bytes.clone()).expect("Should have succeeded!");
+
+            assert_eq!(packet.packet.packet_type, PacketType::Ping);
+            assert_eq!(packet.packet.flags.needs_ack(), true);
+            assert_eq!(packet.packet.flags.has_size(), true);
+            assert_eq!(packet.packet.session_id, 1);
+        }
+
+        #[test]
+        fn should_encode_packet() {
+            let bytes = BASE_PACKET.to_vec();
+
+            let mut server = Server::new();
+            let mut client = Client::new(&mut server);
+
+            let mut packet = PacketV1::new(&mut client, bytes).expect("Should have succeeded!");
+            packet.packet.packet_type = PacketType::Ping;
+            packet.packet.flags.clear_flags();
+            packet.packet.flags.set_flag(PacketFlag::NeedsAck);
+            packet.packet.flags.set_flag(PacketFlag::HasSize);
+            packet.packet.session_id = 1;
+
+            let result: Vec<u8> = packet.into();
+            let expected_result = vec![
+                0xea, 0xd0, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0xc4, 0x00, 0x01, 0x00, 0x00, 0x00,
+                0x10, 0xa3, 0x3d, 0xac, 0x5f, 0x58, 0x97, 0x3f, 0x8e, 0x83, 0xb7, 0x23, 0x16, 0xde,
+                0xc8, 0x47,
+            ];
+            assert_eq!(result, expected_result);
+        }
     }
 }

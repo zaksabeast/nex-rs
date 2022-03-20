@@ -14,6 +14,10 @@ pub struct Server {
 }
 
 impl Server {
+    pub fn set_nex_version(&mut self, nex_version: u32) {
+        self.nex_version = nex_version;
+    }
+
     pub fn get_checksum_version(&self) -> u32 {
         self.checksum_version
     }

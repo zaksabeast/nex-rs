@@ -2,7 +2,7 @@ use crate::server::Server;
 use arc4::Arc4;
 
 pub struct Client<'a> {
-    server: &'a Server,
+    server: &'a mut Server,
     cipher: Arc4<'a>,
     decipher: Arc4<'a>,
     signature_key: Vec<u8>,
@@ -19,8 +19,12 @@ pub struct Client<'a> {
 }
 
 impl<'a> Client<'a> {
-    pub fn get_server(&self) -> &'a Server {
+    pub fn get_server(&self) -> &Server {
         self.server
+    }
+
+    pub fn set_nex_version(&mut self, nex_version: u32) {
+        self.server.set_nex_version(nex_version);
     }
 
     pub fn get_cipher(&mut self) -> &mut Arc4<'a> {

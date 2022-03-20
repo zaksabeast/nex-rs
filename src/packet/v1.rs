@@ -101,6 +101,7 @@ impl<'a> PacketV1<'a> {
 
         let options_len = options.len();
 
+        let mut nex_version = 0u32;
         let mut i = 0;
         while i < options_len {
             let option_type: PacketOption = options_stream
@@ -112,7 +113,7 @@ impl<'a> PacketV1<'a> {
             match option_type {
                 PacketOption::SupportedFunctions => {
                     let lsb = options_stream.default_read_byte_stream(option_size)[0];
-                    // TODO: set nex version
+                    nex_version = lsb.into();
                     self.supported_functions = lsb.into();
                 }
                 PacketOption::ConnectionSignature => {
@@ -132,6 +133,9 @@ impl<'a> PacketV1<'a> {
 
             i = options_stream.get_index();
         }
+
+        // Setting down here avoids issues with the borrow checker
+        self.packet.sender.set_nex_version(nex_version);
 
         Ok(())
     }

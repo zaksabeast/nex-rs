@@ -70,39 +70,27 @@ impl<'a> Client<'a> {
         &self.session_key
     }
 
-    fn reset() {
+    fn reset(&mut self) {
         unimplemented!();
     }
 
-    fn address() -> String {
+    fn get_address(&self) -> String {
         unimplemented!();
     }
 
-    fn server() -> Server {
+    fn update_rc4_key(&mut self, rc4_key: Vec<u8>) {
         unimplemented!();
     }
 
-    fn update_rc4_key(rc4_key: Vec<u8>) {
+    fn update_access_key(&mut self, access_key: String) {
         unimplemented!();
     }
 
-    fn update_access_key(access_key: String) {
+    fn increase_ping_timeout_time(&mut self, seconds: u32) {
         unimplemented!();
     }
 
-    fn signature_base() -> u32 {
-        unimplemented!();
-    }
-
-    fn signature_key() -> Vec<u8> {
-        unimplemented!();
-    }
-
-    fn increase_ping_timeout_time(seconds: u32) {
-        unimplemented!();
-    }
-
-    fn start_timeout_timer() {
+    fn start_timeout_timer(&mut self) {
         unimplemented!();
     }
 }

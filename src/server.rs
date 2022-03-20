@@ -53,47 +53,47 @@ impl Server {
         self.flags_version
     }
 
-    fn listen(address: String) {
+    fn listen(&mut self, address: String) {
         unimplemented!()
     }
 
-    fn handle_socket_message() -> Result<(), &'static str> {
+    fn handle_socket_message(&mut self) -> Result<(), &'static str> {
         unimplemented!()
     }
 
-    fn client_connected(client: &mut Client) -> bool {
+    fn client_connected(&mut self, client: &mut Client) -> bool {
         unimplemented!()
     }
 
-    fn kick(client: &mut Client) {
+    fn kick(&mut self, client: &mut Client) {
         unimplemented!()
     }
 
-    fn send_ping(client: &mut Client) {
+    fn send_ping(&mut self, client: &mut Client) {
         unimplemented!()
     }
 
-    fn acknowledge_packet<'a>(packet: impl Packet<'a>, payload: Vec<u8>) {
+    fn acknowledge_packet<'a>(&mut self, packet: impl Packet<'a>, payload: Vec<u8>) {
         unimplemented!()
     }
 
-    fn use_packet_compression(use_packet_compression: bool) {
+    fn use_packet_compression(&mut self, use_packet_compression: bool) {
         unimplemented!()
     }
 
-    fn find_client_from_pid<'a>(pid: u32) -> &'a mut Client<'a> {
+    fn find_client_from_pid<'a>(&self, pid: u32) -> &'a mut Client<'a> {
         unimplemented!()
     }
 
-    fn send<'a>(packet: impl Packet<'a>) {
+    fn send<'a>(&mut self, packet: impl Packet<'a>) {
         unimplemented!()
     }
 
-    fn send_fragment<'a>(packet: impl Packet<'a>, fragment_id: u32) {
+    fn send_fragment<'a>(&mut self, packet: impl Packet<'a>, fragment_id: u32) {
         unimplemented!()
     }
 
-    fn send_raw(conn: String, data: Vec<u8>) {
+    fn send_raw(&mut self, conn: String, data: Vec<u8>) {
         unimplemented!()
     }
 }

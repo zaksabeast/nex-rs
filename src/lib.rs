@@ -7,4 +7,4 @@ mod client;
 mod packet;
 mod rmc_request;
 mod server;
-mod stream_in;
+mod stream;

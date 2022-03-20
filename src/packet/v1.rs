@@ -1,5 +1,5 @@
 use super::{Packet, PacketFlags, PacketOption, PacketType};
-use crate::stream_in::StreamIn;
+use crate::stream::StreamIn;
 use hmac::{Hmac, Mac};
 use md5::Md5;
 use no_std_io::{Cursor, StreamContainer, StreamReader};

@@ -76,7 +76,14 @@ impl<'a> PacketV1<'a> {
             self.packet.payload = stream.default_read_byte_stream(payload_size);
 
             if self.packet.packet_type == PacketType::Data && !self.packet.flags.multi_ack() {
-                unimplemented!()
+                let decipher = self.packet.sender.get_decipher();
+                decipher.encrypt(&mut self.packet.payload);
+                self.packet.rmc_request = self
+                    .packet
+                    .payload
+                    .as_slice()
+                    .try_into()
+                    .map_err(|_| "Invalid RMCRequest from packet")?;
             }
         }
 
@@ -90,7 +97,7 @@ impl<'a> PacketV1<'a> {
     }
 
     pub fn decode_options(&mut self, options: &[u8]) -> Result<(), &'static str> {
-        let mut options_stream = StreamIn::new(options, self.packet.sender.get_server());
+        let mut options_stream = StreamIn::new(options, Some(self.packet.sender.get_server()));
 
         let options_len = options.len();
 

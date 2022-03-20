@@ -3,7 +3,7 @@ use no_std_io::{Cursor, EndianRead, Reader, StreamContainer, StreamReader};
 
 pub struct StreamIn<'a, T: Reader> {
     data: StreamContainer<T>,
-    server: &'a Server,
+    server: Option<&'a Server>,
 }
 
 impl<'a, T: Reader> Reader for StreamIn<'a, T> {
@@ -23,7 +23,7 @@ impl<'a, T: Reader> Cursor for StreamIn<'a, T> {
 }
 
 impl<'a, T: Reader> StreamIn<'a, T> {
-    pub fn new(data: T, server: &'a Server) -> Self {
+    pub fn new(data: T, server: Option<&'a Server>) -> Self {
         Self {
             data: StreamContainer::new(data),
             server,

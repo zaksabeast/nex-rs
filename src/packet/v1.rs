@@ -97,7 +97,7 @@ impl PacketV1 {
         let data_len = data.len();
 
         let mut packet = Self {
-            base: BasePacket::new(data),
+            base: BasePacket::new(data, 1),
             magic: 0,
             substream_id: 0,
             supported_functions: 0,
@@ -264,7 +264,7 @@ impl PacketV1 {
     pub fn calculate_signature(
         &self,
         options: &[u8],
-        context: &mut ClientContext,
+        context: &ClientContext,
     ) -> Result<Vec<u8>, &'static str> {
         if self.base.data.len() < 14 {
             return Err("Packet data length is too small");

@@ -18,10 +18,10 @@ pub struct BasePacket {
 }
 
 impl BasePacket {
-    pub(super) fn new(data: Vec<u8>) -> Self {
+    pub(super) fn new(data: Vec<u8>, version: u8) -> Self {
         Self {
             data,
-            version: 0,
+            version,
             source: 0,
             destination: 0,
             packet_type: PacketType::Connect,

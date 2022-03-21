@@ -1,4 +1,9 @@
-use crate::{counter::Counter, packet::PacketV1, rc4::Rc4, server::Server};
+use crate::{
+    counter::Counter,
+    packet::{Packet, PacketV1},
+    rc4::Rc4,
+    server::Server,
+};
 use std::net::SocketAddr;
 
 pub struct ClientContext {
@@ -61,6 +66,10 @@ impl Client {
                 session_key: vec![],
             },
         }
+    }
+
+    pub fn encode_packet(&mut self, packet: PacketV1) -> Vec<u8> {
+        packet.into_bytes(&mut self.context)
     }
 
     pub fn new_packet(&mut self, data: Vec<u8>) -> Result<PacketV1, &'static str> {

@@ -1,7 +1,7 @@
 use crate::{
     client::Client,
     counter::Counter,
-    packet::{Packet, PacketFlag, PacketType},
+    packet::{Packet, PacketFlag, PacketType, PacketV1},
 };
 use std::net::SocketAddr;
 use tokio::net::UdpSocket;
@@ -133,7 +133,7 @@ impl Server {
             if base.packet_type != PacketType::Connect
                 || (base.packet_type == PacketType::Connect && base.payload.len() <= 0)
             {
-                self.acknowledge_packet(packet, None);
+                self.acknowledge_packet(packet, None, peer).await?;
             }
         }
 
@@ -170,8 +170,49 @@ impl Server {
         Ok(())
     }
 
-    fn acknowledge_packet(&self, packet: impl Packet, payload: Option<Vec<u8>>) {
-        unimplemented!()
+    async fn acknowledge_packet(
+        &mut self,
+        packet: PacketV1,
+        payload: Option<Vec<u8>>,
+        client_addr: SocketAddr,
+    ) -> Result<(), &'static str> {
+        let found_client = self
+            .clients
+            .iter_mut()
+            .find(|client| client.get_address() == client_addr);
+
+        if let Some(client) = found_client {
+            let client_base = packet.get_base();
+            let mut ack_packet = client.new_packet(vec![])?;
+            let mut ack_base = ack_packet.get_mut_base();
+            ack_base.source = client_base.destination;
+            ack_base.destination = client_base.source;
+            ack_base.packet_type = client_base.packet_type;
+            ack_base.sequence_id = client_base.sequence_id;
+            ack_base.fragment_id = client_base.fragment_id;
+            ack_base.flags |= PacketFlag::Ack;
+            ack_base.flags |= PacketFlag::HasSize;
+
+            if let Some(payload) = payload {
+                if payload.len() > 0 {
+                    ack_base.payload = payload;
+                }
+            }
+
+            match ack_base.packet_type {
+                PacketType::Syn | PacketType::Connect | PacketType::Data => {
+                    unimplemented!()
+                }
+                _ => {}
+            };
+
+            ack_packet.substream_id = 0;
+
+            let encoded_packet = &client.encode_packet(ack_packet);
+            self.send_raw(client_addr, encoded_packet).await?;
+        }
+
+        Ok(())
     }
 
     fn use_packet_compression(&mut self, use_packet_compression: bool) {
@@ -184,14 +225,14 @@ impl Server {
             .find(|client| client.get_pid() == pid)
     }
 
-    fn send(&mut self, packet: impl Packet) {
+    fn send(&mut self, packet: PacketV1) {
         unimplemented!()
     }
 
     async fn send_fragment(
         &mut self,
         client: &mut Client,
-        mut packet: impl Packet,
+        mut packet: PacketV1,
         fragment_id: u8,
     ) -> Result<usize, &'static str> {
         let compressed_data = self.compress_packet(&packet.get_base().payload);
@@ -204,12 +245,11 @@ impl Server {
             .try_into()
             .expect("Sequence Id does not fit into u16");
 
-        let encoded_packet = packet.into_bytes(client.get_mut_context());
-
+        let encoded_packet = client.encode_packet(packet);
         self.send_raw(client.get_address(), &encoded_packet).await
     }
 
-    async fn send_raw(&mut self, peer: SocketAddr, data: &[u8]) -> Result<usize, &'static str> {
+    async fn send_raw(&self, peer: SocketAddr, data: &[u8]) -> Result<usize, &'static str> {
         self.socket
             .as_ref()
             .expect("Socket not found")

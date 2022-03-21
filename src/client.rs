@@ -100,7 +100,7 @@ impl Client {
         self.sequence_id_out = Counter::default();
 
         self.update_access_key(self.context.access_key.to_string());
-        self.update_rc4_key("CD&ML".as_bytes().to_vec());
+        self.update_rc4_key("CD&ML".as_bytes());
 
         if self.context.prudp_version == 0 {
             self.set_client_connection_signature(vec![0; 4]);
@@ -129,9 +129,9 @@ impl Client {
         self.sequence_id_out.increment()
     }
 
-    fn update_rc4_key(&mut self, rc4_key: Vec<u8>) {
-        self.context.cipher = Rc4::new(&rc4_key.clone());
-        self.context.decipher = Rc4::new(&rc4_key.clone());
+    fn update_rc4_key(&mut self, rc4_key: &[u8]) {
+        self.context.cipher = Rc4::new(rc4_key);
+        self.context.decipher = Rc4::new(rc4_key);
     }
 
     fn update_access_key(&mut self, access_key: String) {

@@ -55,12 +55,20 @@ impl Server {
         self.nex_version = nex_version;
     }
 
+    pub fn get_access_key(&self) -> String {
+        self.access_key.to_string()
+    }
+
     pub fn get_checksum_version(&self) -> u32 {
         self.checksum_version
     }
 
     pub fn get_flags_version(&self) -> u32 {
         self.flags_version
+    }
+
+    pub fn get_prudp_version(&self) -> u32 {
+        self.prudp_version
     }
 
     async fn listen(&mut self, addr: &str) -> Result<(), &'static str> {

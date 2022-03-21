@@ -15,5 +15,5 @@ use crate::client::ClientContext;
 pub trait Packet {
     fn get_base(&self) -> &BasePacket;
     fn get_mut_base(&mut self) -> &mut BasePacket;
-    fn into_bytes(self: Self, context: &mut ClientContext) -> Vec<u8>;
+    fn into_bytes(self, context: &mut ClientContext) -> Vec<u8>;
 }

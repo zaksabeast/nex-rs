@@ -11,3 +11,4 @@ mod rmc_request;
 mod server;
 mod stream;
 mod compression;
+mod kerberos;

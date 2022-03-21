@@ -83,6 +83,18 @@ impl Client {
         self.address
     }
 
+    pub fn get_pid(&self) -> u32 {
+        self.pid
+    }
+
+    pub fn get_mut_context(&mut self) -> &mut ClientContext {
+        &mut self.context
+    }
+
+    pub fn increment_sequence_id_out(&mut self) -> usize {
+        self.sequence_id_out.increment()
+    }
+
     fn update_rc4_key(&mut self, rc4_key: Vec<u8>) {
         unimplemented!();
     }

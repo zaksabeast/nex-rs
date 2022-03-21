@@ -2,19 +2,19 @@ use super::{PacketFlags, PacketType};
 use crate::rmc_request::RMCRequest;
 
 pub struct BasePacket {
-    pub(super) data: Vec<u8>,
-    pub(super) version: u8,
-    pub(super) source: u8,
-    pub(super) destination: u8,
-    pub(super) packet_type: PacketType,
-    pub(super) flags: PacketFlags,
-    pub(super) session_id: u8,
-    pub(super) signature: Vec<u8>,
-    pub(super) sequence_id: u16,
-    pub(super) connection_signature: Vec<u8>,
-    pub(super) fragment_id: u8,
-    pub(super) payload: Vec<u8>,
-    pub(super) rmc_request: RMCRequest,
+    pub data: Vec<u8>,
+    pub version: u8,
+    pub source: u8,
+    pub destination: u8,
+    pub packet_type: PacketType,
+    pub flags: PacketFlags,
+    pub session_id: u8,
+    pub signature: Vec<u8>,
+    pub sequence_id: u16,
+    pub connection_signature: Vec<u8>,
+    pub fragment_id: u8,
+    pub payload: Vec<u8>,
+    pub rmc_request: RMCRequest,
 }
 
 impl BasePacket {
@@ -34,21 +34,5 @@ impl BasePacket {
             payload: vec![],
             rmc_request: RMCRequest::default(),
         }
-    }
-
-    pub fn get_flags(&self) -> PacketFlags {
-        self.flags
-    }
-
-    pub fn get_packet_type(&self) -> PacketType {
-        self.packet_type
-    }
-
-    pub fn get_connection_signature(&self) -> Vec<u8> {
-        self.connection_signature.clone()
-    }
-
-    pub fn get_payload(&self) -> &[u8] {
-        &self.payload
     }
 }

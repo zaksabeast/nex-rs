@@ -1,7 +1,7 @@
 use crate::{
     client::Client,
     counter::Counter,
-    packet::{Packet, PacketType},
+    packet::{Packet, PacketFlag, PacketType},
 };
 use std::net::SocketAddr;
 use tokio::net::UdpSocket;
@@ -109,20 +109,18 @@ impl Server {
         client.increase_ping_timeout_time(self.ping_timeout);
 
         let base = packet.get_base();
-        let flags = base.get_flags();
-
-        if flags.ack() || flags.multi_ack() {
+        if base.flags.ack() || base.flags.multi_ack() {
             return Ok(());
         }
 
-        match base.get_packet_type() {
+        match base.packet_type {
             PacketType::Syn => {
                 client.reset();
                 client.set_is_connected(true);
                 client.start_timeout_timer();
             }
             PacketType::Connect => {
-                client.set_client_connection_signature(base.get_connection_signature());
+                client.set_client_connection_signature(base.connection_signature.clone());
             }
 
             PacketType::Disconnect => {
@@ -131,9 +129,9 @@ impl Server {
             _ => {}
         };
 
-        if base.get_packet_type() == PacketType::Disconnect && flags.needs_ack() {
-            if base.get_packet_type() != PacketType::Connect
-                || (base.get_packet_type() == PacketType::Connect && base.get_payload().len() <= 0)
+        if base.packet_type == PacketType::Disconnect && base.flags.needs_ack() {
+            if base.packet_type != PacketType::Connect
+                || (base.packet_type == PacketType::Connect && base.payload.len() <= 0)
             {
                 self.acknowledge_packet(packet, None);
             }
@@ -142,16 +140,34 @@ impl Server {
         Ok(())
     }
 
-    fn client_connected(&mut self, client: &mut Client) -> bool {
-        unimplemented!()
+    fn check_if_client_connected(&mut self, client: &Client) -> bool {
+        self.clients
+            .iter()
+            .any(|item| item.get_address() == client.get_address())
     }
 
     fn kick(&mut self, addr: SocketAddr) {
-        unimplemented!()
+        let client_index = self
+            .clients
+            .iter_mut()
+            .position(|client| client.get_address() == addr);
+
+        if let Some(index) = client_index {
+            self.clients.remove(index);
+        }
     }
 
-    fn send_ping(&mut self, client: &mut Client) {
-        unimplemented!()
+    fn send_ping(&mut self, client: &mut Client) -> Result<(), &'static str> {
+        let mut packet = client.new_packet(vec![])?;
+        let base = packet.get_mut_base();
+        base.source = 0xa1;
+        base.destination = 0xaf;
+        base.packet_type = PacketType::Ping;
+        base.flags |= PacketFlag::Ack;
+        base.flags |= PacketFlag::Reliable;
+
+        self.send(packet);
+        Ok(())
     }
 
     fn acknowledge_packet(&self, packet: impl Packet, payload: Option<Vec<u8>>) {
@@ -162,19 +178,47 @@ impl Server {
         unimplemented!()
     }
 
-    fn find_client_from_pid(&mut self, pid: u32) -> &mut Client {
-        unimplemented!()
+    fn find_client_from_pid(&mut self, pid: u32) -> Option<&mut Client> {
+        self.clients
+            .iter_mut()
+            .find(|client| client.get_pid() == pid)
     }
 
     fn send(&mut self, packet: impl Packet) {
         unimplemented!()
     }
 
-    fn send_fragment(&mut self, packet: impl Packet, fragment_id: u32) {
-        unimplemented!()
+    async fn send_fragment(
+        &mut self,
+        client: &mut Client,
+        mut packet: impl Packet,
+        fragment_id: u8,
+    ) -> Result<usize, &'static str> {
+        let compressed_data = self.compress_packet(&packet.get_base().payload);
+
+        let base = packet.get_mut_base();
+        base.fragment_id = fragment_id;
+        base.payload = compressed_data;
+        base.sequence_id = client
+            .increment_sequence_id_out()
+            .try_into()
+            .expect("Sequence Id does not fit into u16");
+
+        let encoded_packet = packet.into_bytes(client.get_mut_context());
+
+        self.send_raw(client.get_address(), &encoded_packet).await
     }
 
-    fn send_raw(&mut self, conn: String, data: Vec<u8>) {
+    async fn send_raw(&mut self, peer: SocketAddr, data: &[u8]) -> Result<usize, &'static str> {
+        self.socket
+            .as_ref()
+            .expect("Socket not found")
+            .send_to(data, &peer)
+            .await
+            .map_err(|_| "Error sending data")
+    }
+
+    fn compress_packet(&self, data: &[u8]) -> Vec<u8> {
         unimplemented!()
     }
 }

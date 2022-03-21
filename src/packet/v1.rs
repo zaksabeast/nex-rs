@@ -24,6 +24,72 @@ impl Packet for PacketV1 {
     fn get_mut_base(&mut self) -> &mut BasePacket {
         &mut self.base
     }
+
+    fn into_bytes(mut self: PacketV1, context: &mut ClientContext) -> Vec<u8> {
+        if self.base.packet_type == PacketType::Data {
+            if !self.base.flags.multi_ack() {
+                let payload_len = self.base.payload.len();
+
+                if payload_len > 0 {
+                    self.base.payload = context
+                        .cipher
+                        .encrypt(&self.base.payload)
+                        .expect("Encrypt failed");
+                }
+            }
+
+            if !self.base.flags.has_size() {
+                self.base.flags |= PacketFlag::HasSize;
+            }
+        }
+
+        let type_flags: u16 = if context.flags_version == 0 {
+            u16::from(self.base.packet_type) | u16::from(self.base.flags) << 3
+        } else {
+            u16::from(self.base.packet_type) | u16::from(self.base.flags) << 4
+        };
+
+        let mut stream = StreamOut::new();
+
+        stream.checked_write_stream_le(&0xd0eau16); // v1 magic
+        stream.checked_write_stream(&1u8);
+
+        let options = self.encode_options();
+        let options_len: u8 = options
+            .len()
+            .try_into()
+            .expect("Options length is too large");
+        let payload_len: u16 = self
+            .base
+            .payload
+            .len()
+            .try_into()
+            .expect("Payload length is too large");
+
+        stream.checked_write_stream(&options_len);
+        stream.checked_write_stream_le(&payload_len);
+        stream.checked_write_stream(&self.base.source);
+        stream.checked_write_stream(&self.base.destination);
+        stream.checked_write_stream(&type_flags);
+        stream.checked_write_stream(&self.base.session_id);
+        stream.checked_write_stream(&self.substream_id);
+        stream.checked_write_stream(&self.base.sequence_id);
+
+        let signature = self
+            .calculate_signature(&options, context)
+            .expect("Signature could not be calculated");
+        stream.checked_write_stream_bytes(&signature);
+
+        if options_len > 0 {
+            stream.checked_write_stream_bytes(&options);
+        }
+
+        if !self.base.payload.is_empty() {
+            stream.checked_write_stream_bytes(&self.base.payload);
+        }
+
+        stream.into()
+    }
 }
 
 impl PacketV1 {
@@ -219,72 +285,6 @@ impl PacketV1 {
         mac.update(payload);
         Ok(mac.finalize().into_bytes().to_vec())
     }
-
-    pub fn to_bytes(mut self: PacketV1, context: &mut ClientContext) -> Vec<u8> {
-        if self.base.packet_type == PacketType::Data {
-            if !self.base.flags.multi_ack() {
-                let payload_len = self.base.payload.len();
-
-                if payload_len > 0 {
-                    self.base.payload = context
-                        .cipher
-                        .encrypt(&self.base.payload)
-                        .expect("Encrypt failed");
-                }
-            }
-
-            if !self.base.flags.has_size() {
-                self.base.flags |= PacketFlag::HasSize;
-            }
-        }
-
-        let type_flags: u16 = if context.flags_version == 0 {
-            u16::from(self.base.packet_type) | u16::from(self.base.flags) << 3
-        } else {
-            u16::from(self.base.packet_type) | u16::from(self.base.flags) << 4
-        };
-
-        let mut stream = StreamOut::new();
-
-        stream.checked_write_stream_le(&0xd0eau16); // v1 magic
-        stream.checked_write_stream(&1u8);
-
-        let options = self.encode_options();
-        let options_len: u8 = options
-            .len()
-            .try_into()
-            .expect("Options length is too large");
-        let payload_len: u16 = self
-            .base
-            .payload
-            .len()
-            .try_into()
-            .expect("Payload length is too large");
-
-        stream.checked_write_stream(&options_len);
-        stream.checked_write_stream_le(&payload_len);
-        stream.checked_write_stream(&self.base.source);
-        stream.checked_write_stream(&self.base.destination);
-        stream.checked_write_stream(&type_flags);
-        stream.checked_write_stream(&self.base.session_id);
-        stream.checked_write_stream(&self.substream_id);
-        stream.checked_write_stream(&self.base.sequence_id);
-
-        let signature = self
-            .calculate_signature(&options, context)
-            .expect("Signature could not be calculated");
-        stream.checked_write_stream_bytes(&signature);
-
-        if options_len > 0 {
-            stream.checked_write_stream_bytes(&options);
-        }
-
-        if !self.base.payload.is_empty() {
-            stream.checked_write_stream_bytes(&self.base.payload);
-        }
-
-        stream.into()
-    }
 }
 
 #[cfg(test)]
@@ -303,7 +303,7 @@ mod test {
         let bytes = BASE_PACKET.to_vec();
         let mut context = ClientContext::default();
         let packet = PacketV1::new(bytes.clone(), &mut context).expect("Should have succeeded!");
-        let result = packet.to_bytes(&mut context);
+        let result = packet.into_bytes(&mut context);
         assert_eq!(result, bytes);
     }
 
@@ -343,7 +343,7 @@ mod test {
             packet.supported_functions = 4;
             packet.maximum_substream_id = 1;
 
-            let result: Vec<u8> = packet.to_bytes(&mut context);
+            let result: Vec<u8> = packet.into_bytes(&mut context);
             let expected_result = vec![
                 0xea, 0xd0, 0x01, 0x1b, 0x00, 0x00, 0x00, 0x00, 0xc0, 0x00, 0x00, 0x00, 0x00, 0x00,
                 0x8e, 0x8a, 0xa3, 0x5e, 0xda, 0xe9, 0xe6, 0xfc, 0xc9, 0xa0, 0xcc, 0xdc, 0x7e, 0x9c,
@@ -399,7 +399,7 @@ mod test {
             packet.base.payload = vec![0xaa];
             packet.base.session_id = 1;
 
-            let result: Vec<u8> = packet.to_bytes(&mut context);
+            let result: Vec<u8> = packet.into_bytes(&mut context);
             let expected_result = vec![
                 0xea, 0xd0, 0x01, 0x1f, 0x01, 0x00, 0x00, 0x00, 0xe1, 0x00, 0x01, 0x00, 0x00, 0x00,
                 0x28, 0x66, 0xa0, 0x43, 0x3c, 0xcd, 0x20, 0xcb, 0xac, 0x2f, 0x29, 0x68, 0x5f, 0x90,
@@ -459,7 +459,7 @@ mod test {
                 0x03, 0x03, 0x03,
             ];
 
-            let result: Vec<u8> = packet.to_bytes(&mut context);
+            let result: Vec<u8> = packet.into_bytes(&mut context);
             let expected_result = vec![
                 0xea, 0xd0, 0x01, 0x03, 0x11, 0x00, 0x00, 0x00, 0xe2, 0x00, 0x01, 0x00, 0x00, 0x00,
                 0x1f, 0x9a, 0x3b, 0xb2, 0x89, 0x33, 0x50, 0x16, 0x4e, 0x79, 0xdd, 0x12, 0xd1, 0xcd,
@@ -503,7 +503,7 @@ mod test {
             packet.base.flags.set_flag(PacketFlag::HasSize);
             packet.base.session_id = 1;
 
-            let result: Vec<u8> = packet.to_bytes(&mut context);
+            let result: Vec<u8> = packet.into_bytes(&mut context);
             let expected_result = vec![
                 0xea, 0xd0, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0xe3, 0x00, 0x01, 0x00, 0x00, 0x00,
                 0x10, 0xa3, 0x3d, 0xac, 0x5f, 0x58, 0x97, 0x3f, 0x8e, 0x83, 0xb7, 0x23, 0x16, 0xde,
@@ -544,7 +544,7 @@ mod test {
             packet.base.flags.set_flag(PacketFlag::HasSize);
             packet.base.session_id = 1;
 
-            let result: Vec<u8> = packet.to_bytes(&mut context);
+            let result: Vec<u8> = packet.into_bytes(&mut context);
             let expected_result = vec![
                 0xea, 0xd0, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0xc4, 0x00, 0x01, 0x00, 0x00, 0x00,
                 0x10, 0xa3, 0x3d, 0xac, 0x5f, 0x58, 0x97, 0x3f, 0x8e, 0x83, 0xb7, 0x23, 0x16, 0xde,

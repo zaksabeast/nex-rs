@@ -3,6 +3,7 @@ use crate::{
     counter::Counter,
     packet::{Packet, PacketType},
 };
+use std::net::SocketAddr;
 use tokio::net::UdpSocket;
 
 pub struct Server {
@@ -93,13 +94,14 @@ impl Server {
             .iter_mut()
             .find(|client| client.get_address() == peer);
 
-        let client = if found_client.is_some() {
-            found_client.unwrap()
-        } else {
-            let new_client = Client::new(peer, self);
-            self.clients.push(new_client);
-            // We just pushed a client, so we know one exists
-            self.clients.last_mut().unwrap()
+        let client = match found_client {
+            Some(client) => client,
+            None => {
+                let new_client = Client::new(peer, self);
+                self.clients.push(new_client);
+                // We just pushed a client, so we know one exists
+                self.clients.last_mut().unwrap()
+            }
         };
 
         let packet = client.new_packet(buf)?;
@@ -113,26 +115,38 @@ impl Server {
             return Ok(());
         }
 
-        if flags.needs_ack() {
-            unimplemented!()
-        }
-
         match base.get_packet_type() {
-            PacketType::Connect
-            | PacketType::Data
-            | PacketType::Disconnect
-            | PacketType::Ping
-            | PacketType::Syn => {
-                unimplemented!()
+            PacketType::Syn => {
+                client.reset();
+                client.set_is_connected(true);
+                client.start_timeout_timer();
+            }
+            PacketType::Connect => {
+                client.set_client_connection_signature(base.get_connection_signature());
+            }
+
+            PacketType::Disconnect => {
+                self.kick(peer);
+            }
+            _ => {}
+        };
+
+        if base.get_packet_type() == PacketType::Disconnect && flags.needs_ack() {
+            if base.get_packet_type() != PacketType::Connect
+                || (base.get_packet_type() == PacketType::Connect && base.get_payload().len() <= 0)
+            {
+                self.acknowledge_packet(packet, None);
             }
         }
+
+        Ok(())
     }
 
     fn client_connected(&mut self, client: &mut Client) -> bool {
         unimplemented!()
     }
 
-    fn kick(&mut self, client: &mut Client) {
+    fn kick(&mut self, addr: SocketAddr) {
         unimplemented!()
     }
 
@@ -140,7 +154,7 @@ impl Server {
         unimplemented!()
     }
 
-    fn acknowledge_packet(&mut self, packet: impl Packet, payload: Vec<u8>) {
+    fn acknowledge_packet(&self, packet: impl Packet, payload: Option<Vec<u8>>) {
         unimplemented!()
     }
 

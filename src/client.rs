@@ -32,7 +32,7 @@ pub struct Client {
     pid: u32,
     local_station_url: String,
     connection_id: u32,
-    connected: bool,
+    is_connected: bool,
     sequence_id_in: Counter,
     sequence_id_out: Counter,
     context: ClientContext,
@@ -49,7 +49,7 @@ impl Client {
             pid: 0,
             local_station_url: "".to_string(),
             connection_id: 0,
-            connected: false,
+            is_connected: false,
             sequence_id_in: Counter::default(),
             sequence_id_out: Counter::default(),
             context: ClientContext {
@@ -67,7 +67,15 @@ impl Client {
         PacketV1::new(data, &mut self.context)
     }
 
-    fn reset(&mut self) {
+    pub fn set_client_connection_signature(&mut self, client_connection_signature: Vec<u8>) {
+        self.client_connection_signature = client_connection_signature;
+    }
+
+    pub fn set_is_connected(&mut self, is_connected: bool) {
+        self.is_connected = is_connected;
+    }
+
+    pub fn reset(&mut self) {
         unimplemented!();
     }
 
@@ -87,7 +95,7 @@ impl Client {
         unimplemented!();
     }
 
-    fn start_timeout_timer(&mut self) {
+    pub fn start_timeout_timer(&mut self) {
         unimplemented!();
     }
 }

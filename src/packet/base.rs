@@ -43,4 +43,12 @@ impl BasePacket {
     pub fn get_packet_type(&self) -> PacketType {
         self.packet_type
     }
+
+    pub fn get_connection_signature(&self) -> Vec<u8> {
+        self.connection_signature.clone()
+    }
+
+    pub fn get_payload(&self) -> &[u8] {
+        &self.payload
+    }
 }

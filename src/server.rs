@@ -129,12 +129,11 @@ impl Server {
             _ => {}
         };
 
-        if base.packet_type == PacketType::Disconnect && base.flags.needs_ack() {
-            if base.packet_type != PacketType::Connect
-                || (base.packet_type == PacketType::Connect && base.payload.len() <= 0)
-            {
-                self.acknowledge_packet(packet, None, peer).await?;
-            }
+        if base.flags.needs_ack()
+            && (base.packet_type != PacketType::Connect
+                || (base.packet_type == PacketType::Connect && !base.payload.is_empty()))
+        {
+            self.acknowledge_packet(packet, None, peer).await?;
         }
 
         Ok(())
@@ -194,7 +193,7 @@ impl Server {
             ack_base.flags |= PacketFlag::HasSize;
 
             if let Some(payload) = payload {
-                if payload.len() > 0 {
+                if !payload.is_empty() {
                     ack_base.payload = payload;
                 }
             }

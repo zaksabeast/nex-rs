@@ -10,13 +10,13 @@ struct KerberosEncryption {
 impl KerberosEncryption {
     pub fn new(key: Vec<u8>) -> Self {
         KerberosEncryption {
-            key: key.clone(),
-            cipher: Rc4::new(&key)
+            cipher: Rc4::new(&key),
+            key
         }
     }
 
-    pub fn encrypt(&mut self, buffer: Vec<u8>) -> Result<Vec<u8>, &'static str> {
-        let mut encrypted = self.cipher.encrypt(&buffer).expect("Encrypt failed");
+    pub fn encrypt(&mut self, buffer: &[u8]) -> Result<Vec<u8>, &'static str> {
+        let mut encrypted = self.cipher.encrypt(buffer).expect("Encrypt failed");
 
         let mut mac = Hmac::<Md5>::new_from_slice(&self.key).map_err(|_| "Invalid hamc key size")?;
         mac.update(&encrypted);
@@ -25,8 +25,8 @@ impl KerberosEncryption {
         Ok(encrypted)
     }
 
-    pub fn decrypt(&mut self, buffer: Vec<u8>) -> Result<Vec<u8>, &'static str> {
-        if self.validate(buffer.clone())? {
+    pub fn decrypt(&mut self, buffer: &[u8]) -> Result<Vec<u8>, &'static str> {
+        if self.validate(buffer)? {
             let offset = buffer.len() - 0x10;
             let encrypted = &buffer[..offset];
 
@@ -36,7 +36,7 @@ impl KerberosEncryption {
         }
     }
 
-    pub fn validate(&self, buffer: Vec<u8>) -> Result<bool, &'static str> {
+    pub fn validate(&self, buffer: &[u8]) -> Result<bool, &'static str> {
         let offset = buffer.len() - 0x10;
         let data = &buffer[..offset];
         let checksum = &buffer[offset..];

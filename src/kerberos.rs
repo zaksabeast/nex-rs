@@ -16,7 +16,7 @@ impl KerberosEncryption {
     }
 
     pub fn encrypt(&mut self, buffer: Vec<u8>) -> Result<Vec<u8>, &'static str> {
-        let mut encrypted = self.cipher.decrypt(&buffer).expect("Encrypt failed");
+        let mut encrypted = self.cipher.encrypt(&buffer).expect("Encrypt failed");
 
         let mut mac = Hmac::<Md5>::new_from_slice(&self.key).map_err(|_| "Invalid hamc key size")?;
         mac.update(&encrypted);

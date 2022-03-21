@@ -32,7 +32,7 @@ impl Rc4 {
         let mut in_buf = RefReadBuffer::new(data);
         self.inner
             .decrypt(&mut in_buf, &mut out_buf, true)
-            .map_err(|_| "Encrypt failed")?;
+            .map_err(|_| "Decrypt failed")?;
 
         Ok(out)
     }

@@ -10,3 +10,4 @@ mod rc4;
 mod rmc_request;
 mod server;
 mod stream;
+mod compression;

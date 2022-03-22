@@ -33,7 +33,7 @@ impl Default for ClientContext {
     }
 }
 
-pub struct Client {
+pub struct ClientConnection {
     address: SocketAddr,
     secure_key: Vec<u8>,
     server_connection_signature: Vec<u8>,
@@ -48,7 +48,7 @@ pub struct Client {
     context: ClientContext,
 }
 
-impl Client {
+impl ClientConnection {
     pub fn new(address: SocketAddr, server: &mut Server) -> Self {
         Self {
             address,

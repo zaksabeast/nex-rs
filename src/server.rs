@@ -1,5 +1,5 @@
 use crate::{
-    client::Client,
+    client::ClientConnection,
     counter::Counter,
     packet::{Packet, PacketFlag, PacketType, PacketV1},
 };
@@ -21,7 +21,7 @@ pub struct Server {
     kerberos_key_derivation: u32,
     server_version: u32,
     connection_id_counter: Counter,
-    clients: Vec<Client>,
+    clients: Vec<ClientConnection>,
 }
 
 impl Default for Server {
@@ -105,7 +105,7 @@ impl Server {
         let client = match found_client {
             Some(client) => client,
             None => {
-                let new_client = Client::new(peer, self);
+                let new_client = ClientConnection::new(peer, self);
                 self.clients.push(new_client);
                 // We just pushed a client, so we know one exists
                 self.clients.last_mut().unwrap()
@@ -149,7 +149,7 @@ impl Server {
         Ok(())
     }
 
-    fn check_if_client_connected(&mut self, client: &Client) -> bool {
+    fn check_if_client_connected(&mut self, client: &ClientConnection) -> bool {
         self.clients
             .iter()
             .any(|item| item.get_address() == client.get_address())
@@ -166,7 +166,7 @@ impl Server {
         }
     }
 
-    fn send_ping(&mut self, client: &mut Client) -> Result<(), &'static str> {
+    fn send_ping(&mut self, client: &mut ClientConnection) -> Result<(), &'static str> {
         let mut packet = client.new_packet(vec![])?;
 
         packet.set_source(0xa1);
@@ -225,7 +225,7 @@ impl Server {
         unimplemented!()
     }
 
-    fn find_client_from_pid(&mut self, pid: u32) -> Option<&mut Client> {
+    fn find_client_from_pid(&mut self, pid: u32) -> Option<&mut ClientConnection> {
         self.clients
             .iter_mut()
             .find(|client| client.get_pid() == pid)
@@ -237,7 +237,7 @@ impl Server {
 
     async fn send_fragment(
         &mut self,
-        client: &mut Client,
+        client: &mut ClientConnection,
         mut packet: PacketV1,
         fragment_id: u8,
     ) -> Result<usize, &'static str> {

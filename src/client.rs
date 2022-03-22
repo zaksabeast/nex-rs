@@ -4,8 +4,8 @@ use crate::{
     rc4::Rc4,
     server::Server,
 };
+use md5::{Digest, Md5};
 use std::net::SocketAddr;
-use md5::{Md5, Digest};
 
 pub struct ClientContext {
     pub access_key: String,
@@ -75,8 +75,8 @@ impl ClientConnection {
         }
     }
 
-    pub fn encode_packet(&mut self, packet: PacketV1) -> Vec<u8> {
-        packet.into_bytes(&mut self.context)
+    pub fn encode_packet(&mut self, packet: &mut PacketV1) -> Vec<u8> {
+        packet.to_bytes(&mut self.context)
     }
 
     pub fn new_packet(&mut self, data: Vec<u8>) -> Result<PacketV1, &'static str> {

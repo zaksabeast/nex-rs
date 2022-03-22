@@ -15,7 +15,7 @@ use crate::{client::ClientContext, rmc_request::RMCRequest};
 pub trait Packet {
     fn get_base(&self) -> &BasePacket;
     fn get_mut_base(&mut self) -> &mut BasePacket;
-    fn into_bytes(self, context: &mut ClientContext) -> Vec<u8>;
+    fn to_bytes(&mut self, context: &mut ClientContext) -> Vec<u8>;
 
     fn get_data(&self) -> &[u8] {
         &self.get_base().data
@@ -54,6 +54,9 @@ pub trait Packet {
 
     fn get_flags(&self) -> PacketFlags {
         self.get_base().flags
+    }
+    fn get_mut_flags(&mut self) -> &mut PacketFlags {
+        &mut self.get_mut_base().flags
     }
     fn set_flags(&mut self, value: PacketFlags) {
         self.get_mut_base().flags = value;

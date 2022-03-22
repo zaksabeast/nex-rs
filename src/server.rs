@@ -2,7 +2,9 @@ use crate::{
     client::ClientConnection,
     counter::Counter,
     packet::{Packet, PacketFlag, PacketType, PacketV1},
+    stream::StreamOut,
 };
+use no_std_io::StreamWriter;
 use std::net::SocketAddr;
 use tokio::net::UdpSocket;
 
@@ -166,7 +168,7 @@ impl Server {
         }
     }
 
-    fn send_ping(&mut self, client: &mut ClientConnection) -> Result<(), &'static str> {
+    async fn send_ping(&mut self, client: &mut ClientConnection) -> Result<(), &'static str> {
         let mut packet = client.new_packet(vec![])?;
 
         packet.set_source(0xa1);
@@ -174,7 +176,7 @@ impl Server {
         packet.set_packet_type(PacketType::Ping);
         packet.set_flags(PacketFlag::Ack | PacketFlag::Reliable);
 
-        self.send(packet);
+        self.send(client, &mut packet).await?;
         Ok(())
     }
 
@@ -206,23 +208,51 @@ impl Server {
             }
 
             match ack_packet.get_packet_type() {
-                PacketType::Syn | PacketType::Connect | PacketType::Data => {
-                    unimplemented!()
+                PacketType::Syn => {
+                    // TODO: Get signature from random bytes
+                    let connection_signature = vec![0; 16];
+
+                    client.set_client_connection_signature(connection_signature.clone());
+                    ack_packet.set_connection_signature(connection_signature);
+                    ack_packet.set_supported_functions(packet.get_supported_functions());
+                    ack_packet.set_maximum_substream_id(0);
+                }
+                PacketType::Connect => {
+                    ack_packet.set_connection_signature(vec![0; 16]);
+                    ack_packet.set_supported_functions(packet.get_supported_functions());
+                    ack_packet.set_initial_sequence_id(10000);
+                    ack_packet.set_maximum_substream_id(0);
+                }
+                PacketType::Data => {
+                    // Aggregate acknowledgement
+                    ack_packet.get_mut_flags().clear_flag(PacketFlag::Ack);
+                    ack_packet.get_mut_flags().set_flag(PacketFlag::MultiAck);
+
+                    let mut payload_stream = StreamOut::new();
+
+                    // New version
+                    if self.nex_version >= 2 {
+                        ack_packet.set_sequence_id(0);
+                        ack_packet.set_substream_id(1);
+
+                        // We're going to mimic nex-go and do one ack packet
+                        payload_stream.checked_write_stream(&0u8); // substream id
+                        payload_stream.checked_write_stream(&0u8); // length of additional sequence ids
+                        payload_stream.checked_write_stream_le(&packet.get_sequence_id());
+                    }
+
+                    ack_packet.set_payload(payload_stream.into())
                 }
                 _ => {}
             };
 
             ack_packet.set_substream_id(0);
 
-            let encoded_packet = &client.encode_packet(ack_packet);
+            let encoded_packet = &client.encode_packet(&mut ack_packet);
             self.send_raw(client_addr, encoded_packet).await?;
         }
 
         Ok(())
-    }
-
-    fn use_packet_compression(&mut self, use_packet_compression: bool) {
-        unimplemented!()
     }
 
     fn find_client_from_pid(&mut self, pid: u32) -> Option<&mut ClientConnection> {
@@ -231,14 +261,36 @@ impl Server {
             .find(|client| client.get_pid() == pid)
     }
 
-    fn send(&mut self, packet: PacketV1) {
-        unimplemented!()
+    async fn send(
+        &mut self,
+        client: &mut ClientConnection,
+        packet: &mut PacketV1,
+    ) -> Result<(), &'static str> {
+        let fragment_size: usize = self.fragment_size.into();
+        let data = packet.get_payload().to_vec();
+        let fragment_count = data.len() / fragment_size;
+        let mut fragment_data = data.as_slice();
+
+        for i in 0..fragment_count {
+            let fragment_id: u8 = (i + 1).try_into().map_err(|_| "Too many fragments!")?;
+
+            if fragment_data.len() < fragment_size {
+                packet.set_payload(fragment_data.to_vec());
+                self.send_fragment(client, packet, fragment_id).await?;
+            } else {
+                packet.set_payload(data[..fragment_size].to_vec());
+                self.send_fragment(client, packet, fragment_id).await?;
+                fragment_data = &data[fragment_size..];
+            }
+        }
+
+        Ok(())
     }
 
     async fn send_fragment(
         &mut self,
         client: &mut ClientConnection,
-        mut packet: PacketV1,
+        packet: &mut PacketV1,
         fragment_id: u8,
     ) -> Result<usize, &'static str> {
         let compressed_data = self.compress_packet(packet.get_payload());
@@ -266,6 +318,10 @@ impl Server {
     }
 
     fn compress_packet(&self, data: &[u8]) -> Vec<u8> {
-        unimplemented!()
+        if self.use_packet_compression {
+            unimplemented!()
+        } else {
+            data.to_vec()
+        }
     }
 }

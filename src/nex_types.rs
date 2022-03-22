@@ -91,6 +91,7 @@ impl DateTime {
     }
 }
 
+#[derive(Default)]
 pub struct StationURL {
     scheme: Option<String>,
     address: Option<String>,
@@ -107,28 +108,6 @@ pub struct StationURL {
     pmp: Option<String>,
     probe_init: Option<String>,
     prid: Option<String>
-}
-
-impl Default for StationURL {
-    fn default() -> Self {
-        Self {
-            scheme: None,
-            address: None,
-            port: None,
-            stream: None,
-            sid: None,
-            cid: None,
-            pid: None,
-            transport_type: None,
-            rvcid: None,
-            natm: None,
-            natf: None,
-            upnp: None,
-            pmp: None,
-            probe_init: None,
-            prid: None
-        }
-    }
 }
 
 impl StationURL {
@@ -253,23 +232,23 @@ impl StationURL {
     }
 
     pub fn new_from_string(str: String) -> Self {
-        if str == "".to_string() {
+        if str == *"" {
             return Self::default();
         }
 
         let mut station_url = Self::default();
         let mut split = str.split(":/");
 
-        station_url.scheme = Some(split.next().unwrap_or_else(|| "").to_string());
-        let fields = split.next().unwrap_or_else(|| "");
+        station_url.scheme = Some(split.next().unwrap_or("").to_string());
+        let fields = split.next().unwrap_or("");
 
-        let mut params = fields.split(";");
+        let params = fields.split(';');
 
-        while let Some(param) = params.next() {
-            let mut split = param.split("=");
+        for param in params {
+            let mut split = param.split('=');
 
-            let name = split.next().unwrap_or_else(|| "");
-            let value: Option<String> = Some(split.next().unwrap_or_else(|| "").to_string());
+            let name = split.next().unwrap_or("");
+            let value: Option<String> = Some(split.next().unwrap_or("").to_string());
             match name {
                 "address" => station_url.address = value,
                 "port" => station_url.port = value,
@@ -361,29 +340,25 @@ impl StationURL {
     }
 }
 
-struct Result {
-    result_code: u32
-}
+struct ResultCode(u32);
 
-impl Result {
+impl ResultCode {
     pub fn new_from_code(result_code: u32) -> Self {
-        Self {
+        Self (
             result_code
-        }
+        )
     }
 
-    pub fn extract_from_stream<T: Reader>(&mut self, stream: &mut StreamIn<T>) -> core::result::Result<(), &'static str> {
-        self.result_code = stream
-            .read_stream_le::<u32>()
-            .map_err(|_| "Result code could not be read")?
-            .try_into()
-            .map_err(|_|"Result code size does not fit into u32")?;
+    pub fn extract_from_stream<T: Reader>(&mut self, stream: &mut StreamIn<T>) -> Result<(), &'static str> {
+        self.0 = stream
+            .read_stream_le()
+            .map_err(|_| "Result code could not be read")?;
 
         Ok(())
     }
 
     pub fn bytes(&self, mut stream: StreamOut) -> Vec<u8> {
-        stream.checked_write_stream_le(&self.result_code);
+        stream.checked_write_stream_le(&self.0);
         stream.into()
     }
 }
@@ -405,16 +380,12 @@ impl ResultRange {
 impl StructureInterface for ResultRange {
     fn extract_from_stream<T: Reader>(&mut self, stream: &mut StreamIn<T>) -> std::result::Result<(), &'static str> {
         self.offset = stream
-            .read_stream_le::<u32>()
-            .map_err(|_| "Offset could not be read")?
-            .try_into()
-            .map_err(|_|"Offset size does not fit into u32")?;
+            .read_stream_le()
+            .map_err(|_| "Offset could not be read")?;
 
         self.length = stream
-            .read_stream_le::<u32>()
-            .map_err(|_| "Length could not be read")?
-            .try_into()
-            .map_err(|_|"Length size does not fit into u32")?;
+            .read_stream_le()
+            .map_err(|_| "Length could not be read")?;
 
         Ok(())
     }

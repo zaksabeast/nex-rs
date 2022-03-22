@@ -1,5 +1,6 @@
 use crate::{
     client::ClientConnection,
+    compression::{dummy_compression, zlib_compression},
     counter::Counter,
     packet::{Packet, PacketFlag, PacketType, PacketV1},
     stream::StreamOut,
@@ -294,7 +295,6 @@ impl Server {
         fragment_id: u8,
     ) -> Result<usize, &'static str> {
         let compressed_data = self.compress_packet(packet.get_payload());
-
         let sequence_id = client
             .increment_sequence_id_out()
             .try_into()
@@ -319,9 +319,10 @@ impl Server {
 
     fn compress_packet(&self, data: &[u8]) -> Vec<u8> {
         if self.use_packet_compression {
-            unimplemented!()
+            zlib_compression::compress(data)
         } else {
-            data.to_vec()
+            dummy_compression::compress(data)
         }
+        .to_vec()
     }
 }

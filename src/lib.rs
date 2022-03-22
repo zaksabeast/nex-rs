@@ -12,3 +12,4 @@ mod server;
 mod stream;
 mod compression;
 mod kerberos;
+mod nex_types;

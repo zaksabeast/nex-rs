@@ -10,7 +10,7 @@ pub trait StructureInterface {
         Ok(())
     }
 
-    fn bytes(&mut self, stream: StreamOut) -> Vec<u8> {
+    fn bytes(&self, stream: StreamOut) -> Vec<u8> {
         Vec::new()
     }
 }
@@ -60,7 +60,7 @@ impl RVConnectionData {
 }
 
 impl StructureInterface for RVConnectionData {
-    fn bytes(&mut self, mut stream: StreamOut) -> Vec<u8> {
+    fn bytes(&self, mut stream: StreamOut) -> Vec<u8> {
         stream.write_string(&self.station_url);
         stream.checked_write_stream_le(&0_u32);
         stream.write_string(&self.station_url_special_protocols);
@@ -406,7 +406,7 @@ impl <T : StructureInterface>DataHolder<T> {
 }
 
 impl<T: StructureInterface> StructureInterface for DataHolder<T> {
-    fn bytes(&mut self, mut stream: StreamOut) -> Vec<u8> {
+    fn bytes(&self, mut stream: StreamOut) -> Vec<u8> {
         let content = self.object.bytes(StreamOut::new());
 
         stream.write_string(&self.name);

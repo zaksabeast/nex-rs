@@ -1,5 +1,5 @@
 use num_enum::{IntoPrimitive, TryFromPrimitive};
-use std::ops::{BitAnd, BitAndAssign, BitOrAssign};
+use std::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign};
 
 #[derive(Debug, Clone, Copy, PartialEq, TryFromPrimitive, IntoPrimitive)]
 #[repr(u16)]
@@ -9,6 +9,14 @@ pub enum PacketFlag {
     NeedsAck = 0x4,
     HasSize = 0x8,
     MultiAck = 0x200,
+}
+
+impl BitOr for PacketFlag {
+    type Output = PacketFlags;
+
+    fn bitor(self, rhs: Self) -> Self::Output {
+        PacketFlags((self as u16) | (rhs as u16))
+    }
 }
 
 impl BitAnd<u16> for PacketFlag {

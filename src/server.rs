@@ -116,19 +116,21 @@ impl Server {
 
         client.increase_ping_timeout_time(self.ping_timeout);
 
-        let base = packet.get_base();
-        if base.flags.ack() || base.flags.multi_ack() {
+        let flags = packet.get_flags();
+        if flags.ack() || flags.multi_ack() {
             return Ok(());
         }
 
-        match base.packet_type {
+        let packet_type = packet.get_packet_type();
+        match packet_type {
             PacketType::Syn => {
                 client.reset();
                 client.set_is_connected(true);
                 client.start_timeout_timer();
             }
             PacketType::Connect => {
-                client.set_client_connection_signature(base.connection_signature.clone());
+                let client_connection_signature = packet.get_connection_signature().to_vec();
+                client.set_client_connection_signature(client_connection_signature);
             }
 
             PacketType::Disconnect => {
@@ -137,9 +139,9 @@ impl Server {
             _ => {}
         };
 
-        if base.flags.needs_ack()
-            && (base.packet_type != PacketType::Connect
-                || (base.packet_type == PacketType::Connect && !base.payload.is_empty()))
+        if flags.needs_ack()
+            && (packet_type != PacketType::Connect
+                || (packet_type == PacketType::Connect && !packet.get_payload().is_empty()))
         {
             self.acknowledge_packet(packet, None, peer).await?;
         }
@@ -166,12 +168,11 @@ impl Server {
 
     fn send_ping(&mut self, client: &mut Client) -> Result<(), &'static str> {
         let mut packet = client.new_packet(vec![])?;
-        let base = packet.get_mut_base();
-        base.source = 0xa1;
-        base.destination = 0xaf;
-        base.packet_type = PacketType::Ping;
-        base.flags |= PacketFlag::Ack;
-        base.flags |= PacketFlag::Reliable;
+
+        packet.set_source(0xa1);
+        packet.set_destination(0xaf);
+        packet.set_packet_type(PacketType::Ping);
+        packet.set_flags(PacketFlag::Ack | PacketFlag::Reliable);
 
         self.send(packet);
         Ok(())
@@ -189,31 +190,29 @@ impl Server {
             .find(|client| client.get_address() == client_addr);
 
         if let Some(client) = found_client {
-            let client_base = packet.get_base();
             let mut ack_packet = client.new_packet(vec![])?;
-            let mut ack_base = ack_packet.get_mut_base();
-            ack_base.source = client_base.destination;
-            ack_base.destination = client_base.source;
-            ack_base.packet_type = client_base.packet_type;
-            ack_base.sequence_id = client_base.sequence_id;
-            ack_base.fragment_id = client_base.fragment_id;
-            ack_base.flags |= PacketFlag::Ack;
-            ack_base.flags |= PacketFlag::HasSize;
+
+            ack_packet.set_source(packet.get_destination());
+            ack_packet.set_destination(packet.get_source());
+            ack_packet.set_packet_type(packet.get_packet_type());
+            ack_packet.set_sequence_id(packet.get_sequence_id());
+            ack_packet.set_fragment_id(packet.get_fragment_id());
+            ack_packet.set_flags(PacketFlag::Ack | PacketFlag::HasSize);
 
             if let Some(payload) = payload {
                 if !payload.is_empty() {
-                    ack_base.payload = payload;
+                    ack_packet.set_payload(payload);
                 }
             }
 
-            match ack_base.packet_type {
+            match ack_packet.get_packet_type() {
                 PacketType::Syn | PacketType::Connect | PacketType::Data => {
                     unimplemented!()
                 }
                 _ => {}
             };
 
-            ack_packet.substream_id = 0;
+            ack_packet.set_substream_id(0);
 
             let encoded_packet = &client.encode_packet(ack_packet);
             self.send_raw(client_addr, encoded_packet).await?;
@@ -242,15 +241,16 @@ impl Server {
         mut packet: PacketV1,
         fragment_id: u8,
     ) -> Result<usize, &'static str> {
-        let compressed_data = self.compress_packet(&packet.get_base().payload);
+        let compressed_data = self.compress_packet(packet.get_payload());
 
-        let base = packet.get_mut_base();
-        base.fragment_id = fragment_id;
-        base.payload = compressed_data;
-        base.sequence_id = client
+        let sequence_id = client
             .increment_sequence_id_out()
             .try_into()
             .expect("Sequence Id does not fit into u16");
+
+        packet.set_sequence_id(sequence_id);
+        packet.set_fragment_id(fragment_id);
+        packet.set_payload(compressed_data);
 
         let encoded_packet = client.encode_packet(packet);
         self.send_raw(client.get_address(), &encoded_packet).await

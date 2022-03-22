@@ -10,10 +10,10 @@ use no_std_io::{Cursor, StreamContainer, StreamReader, StreamWriter};
 pub struct PacketV1 {
     base: BasePacket,
     magic: u16,
-    pub substream_id: u8,
-    pub supported_functions: u32,
-    pub initial_sequence_id: u16,
-    pub maximum_substream_id: u8,
+    substream_id: u8,
+    supported_functions: u32,
+    initial_sequence_id: u16,
+    maximum_substream_id: u8,
 }
 
 impl Packet for PacketV1 {
@@ -110,6 +110,34 @@ impl PacketV1 {
         }
 
         Ok(packet)
+    }
+
+    pub fn get_substream_id(&self) -> u8 {
+        self.substream_id
+    }
+    pub fn set_substream_id(&mut self, value: u8) {
+        self.substream_id = value;
+    }
+
+    pub fn get_supported_functions(&self) -> u32 {
+        self.supported_functions
+    }
+    pub fn set_supported_functions(&mut self, value: u32) {
+        self.supported_functions = value;
+    }
+
+    pub fn get_initial_sequence_id(&self) -> u16 {
+        self.initial_sequence_id
+    }
+    pub fn set_initial_sequence_id(&mut self, value: u16) {
+        self.initial_sequence_id = value;
+    }
+
+    pub fn get_maximum_substream_id(&self) -> u8 {
+        self.maximum_substream_id
+    }
+    pub fn set_maximum_substream_id(&mut self, value: u8) {
+        self.maximum_substream_id = value;
     }
 
     fn decode(&mut self, context: &mut ClientContext) -> Result<(), &'static str> {

@@ -343,12 +343,6 @@ impl StationURL {
 struct ResultCode(u32);
 
 impl ResultCode {
-    pub fn new_from_code(result_code: u32) -> Self {
-        Self (
-            result_code
-        )
-    }
-
     pub fn extract_from_stream<T: Reader>(&mut self, stream: &mut StreamIn<T>) -> Result<(), &'static str> {
         self.0 = stream
             .read_stream_le()
@@ -360,6 +354,12 @@ impl ResultCode {
     pub fn bytes(&self, mut stream: StreamOut) -> Vec<u8> {
         stream.checked_write_stream_le(&self.0);
         stream.into()
+    }
+}
+
+impl From<u32> for ResultCode {
+    fn from(result_code: u32) -> Self {
+        Self(result_code)
     }
 }
 

@@ -47,7 +47,7 @@ pub struct ClientConnection {
     is_connected: bool,
     sequence_id_in: Counter,
     sequence_id_out: Counter,
-    kick_timer: u32,
+    kick_timer: Option<u32>,
     context: ClientContext,
 }
 
@@ -66,7 +66,7 @@ impl ClientConnection {
             is_connected: false,
             sequence_id_in: Counter::default(),
             sequence_id_out: Counter::default(),
-            kick_timer: 0,
+            kick_timer: None,
             context: ClientContext {
                 access_key: server.get_access_key(),
                 cipher: Rc4::new(&[0]),
@@ -148,11 +148,11 @@ impl ClientConnection {
         self.context.signature_key = md5.finalize().to_vec();
     }
 
-    pub fn get_kick_timer(&self) -> u32 {
+    pub fn get_kick_timer(&self) -> Option<u32> {
         self.kick_timer
     }
 
-    pub fn set_kick_timer(&mut self, seconds: u32) {
+    pub fn set_kick_timer(&mut self, seconds: Option<u32>) {
         self.kick_timer = seconds;
     }
 }

@@ -97,14 +97,14 @@ impl Server {
                 invertal.tick().await;
                 let mut clients = clients.lock().await;
                 for client in clients.iter_mut() {
-                    let mut timer = client.get_kick_timer();
-                    timer -= 1;
-                    client.set_kick_timer(timer);
+                    if let Some(timer) = client.get_kick_timer() {
+                        client.set_kick_timer(Some(timer.saturating_sub(3)));
+                    }
                 }
                 *clients = clients
                     .iter()
                     .filter_map(|c| {
-                        if c.get_kick_timer() == 0 {
+                        if c.get_kick_timer() == Some(0) {
                             None
                         } else {
                             Some(c.clone())
@@ -152,7 +152,7 @@ impl Server {
 
         let packet = client.new_packet(buf)?;
 
-        //client.increase_ping_timeout_time(self.ping_timeout);
+        self.increase_ping_timeout_time(client.get_address()).await;
 
         let flags = packet.get_flags();
         if flags.ack() || flags.multi_ack() {
@@ -164,7 +164,7 @@ impl Server {
             PacketType::Syn => {
                 client.reset();
                 client.set_is_connected(true);
-                //client.start_timeout_timer();
+                client.set_kick_timer(Some(self.ping_timeout));
             }
             PacketType::Connect => {
                 let client_connection_signature = packet.get_connection_signature().to_vec();
@@ -353,5 +353,16 @@ impl Server {
             dummy_compression::compress(data)
         }
             .to_vec()
+    }
+
+    async fn increase_ping_timeout_time(&self, peer: SocketAddr) {
+        let mut clients = self.clients.lock().await;
+        let found_client = clients
+            .iter_mut()
+            .find(|client| client.get_address() == peer);
+
+        if let Some(client) = found_client {
+            client.set_kick_timer(Some(self.ping_timeout));
+        }
     }
 }

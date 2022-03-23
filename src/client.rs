@@ -7,6 +7,7 @@ use crate::{
 use md5::{Digest, Md5};
 use std::net::SocketAddr;
 
+#[derive(Clone)]
 pub struct ClientContext {
     pub access_key: String,
     pub cipher: Rc4,
@@ -33,6 +34,7 @@ impl Default for ClientContext {
     }
 }
 
+#[derive(Clone)]
 pub struct ClientConnection {
     address: SocketAddr,
     secure_key: Vec<u8>,
@@ -45,11 +47,13 @@ pub struct ClientConnection {
     is_connected: bool,
     sequence_id_in: Counter,
     sequence_id_out: Counter,
+    kick_timer: Option<u32>,
     context: ClientContext,
 }
 
+
 impl ClientConnection {
-    pub fn new(address: SocketAddr, server: &mut Server) -> Self {
+    pub fn new(address: SocketAddr, server: &Server) -> Self {
         Self {
             address,
             secure_key: vec![],
@@ -62,6 +66,7 @@ impl ClientConnection {
             is_connected: false,
             sequence_id_in: Counter::default(),
             sequence_id_out: Counter::default(),
+            kick_timer: None,
             context: ClientContext {
                 access_key: server.get_access_key(),
                 cipher: Rc4::new(&[0]),
@@ -143,11 +148,11 @@ impl ClientConnection {
         self.context.signature_key = md5.finalize().to_vec();
     }
 
-    pub fn increase_ping_timeout_time(&mut self, seconds: u32) {
-        unimplemented!();
+    pub fn get_kick_timer(&self) -> Option<u32> {
+        self.kick_timer
     }
 
-    pub fn start_timeout_timer(&mut self) {
-        unimplemented!();
+    pub fn set_kick_timer(&mut self, seconds: Option<u32>) {
+        self.kick_timer = seconds;
     }
 }

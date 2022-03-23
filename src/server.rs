@@ -351,7 +351,6 @@ impl Server {
         } else {
             dummy_compression::compress(data)
         }
-            .to_vec()
     }
 
     async fn increase_ping_timeout_time(&self, peer: SocketAddr) {

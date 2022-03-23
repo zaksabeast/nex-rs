@@ -17,6 +17,6 @@ pub mod zlib_compression {
     }
 
     pub fn decompress(data: &[u8]) -> Result<Vec<u8>, TINFLStatus> {
-        Ok(decompress_to_vec_zlib(data)?)
+        decompress_to_vec_zlib(data)
     }
 }

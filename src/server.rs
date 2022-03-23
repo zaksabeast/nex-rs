@@ -7,7 +7,12 @@ use crate::{
 };
 use no_std_io::StreamWriter;
 use std::net::SocketAddr;
+use std::sync::Arc;
+use std::time::Duration;
 use tokio::net::UdpSocket;
+use tokio::sync::Mutex;
+use tokio::task::JoinHandle;
+use tokio::time;
 
 pub struct Server {
     socket: Option<UdpSocket>,
@@ -24,7 +29,8 @@ pub struct Server {
     kerberos_key_derivation: u32,
     server_version: u32,
     connection_id_counter: Counter,
-    clients: Vec<ClientConnection>,
+    ping_kick_thread: Option<JoinHandle<()>>,
+    clients: Arc<Mutex<Vec<ClientConnection>>>,
 }
 
 impl Default for Server {
@@ -44,7 +50,8 @@ impl Default for Server {
             kerberos_key_size: 32,
             kerberos_key_derivation: 0,
             connection_id_counter: Counter::default(),
-            clients: vec![],
+            ping_kick_thread: None,
+            clients: Arc::new(Mutex::new(vec![])),
         }
     }
 }
@@ -80,6 +87,25 @@ impl Server {
             .map_err(|_| "Couldn't bind to address")?;
         self.socket = Some(socket);
 
+        let clients = Arc::clone(&self.clients);
+        self.ping_kick_thread = Some(tokio::spawn(async move {
+            let mut invertal = time::interval(Duration::from_secs(3));
+            invertal.tick().await;
+
+            let clients = clients;
+            loop {
+                invertal.tick().await;
+                let mut clients = clients.lock().await;
+                for client in clients.iter_mut() {
+                    let mut timer = client.get_kick_timer();
+                    timer -= 1;
+                    client.set_kick_timer(timer);
+                }
+                let clients_clone = clients.clone();
+                *clients = clients_clone.into_iter().filter(|c| c.get_kick_timer() == 0).collect::<Vec<ClientConnection>>()
+            }
+        }));
+
         loop {
             let result = self.handle_socket_message().await;
             if result.is_err() {
@@ -100,8 +126,9 @@ impl Server {
             .await
             .map_err(|_| "UDP Receive error")?;
 
-        let found_client = self
-            .clients
+        let mut clients = self.clients.lock().await;
+
+        let found_client = clients
             .iter_mut()
             .find(|client| client.get_address() == peer);
 
@@ -109,15 +136,15 @@ impl Server {
             Some(client) => client,
             None => {
                 let new_client = ClientConnection::new(peer, self);
-                self.clients.push(new_client);
+                clients.push(new_client);
                 // We just pushed a client, so we know one exists
-                self.clients.last_mut().unwrap()
+                clients.last_mut().unwrap()
             }
         };
 
         let packet = client.new_packet(buf)?;
 
-        client.increase_ping_timeout_time(self.ping_timeout);
+        //client.increase_ping_timeout_time(self.ping_timeout);
 
         let flags = packet.get_flags();
         if flags.ack() || flags.multi_ack() {
@@ -129,7 +156,7 @@ impl Server {
             PacketType::Syn => {
                 client.reset();
                 client.set_is_connected(true);
-                client.start_timeout_timer();
+                //client.start_timeout_timer();
             }
             PacketType::Connect => {
                 let client_connection_signature = packet.get_connection_signature().to_vec();
@@ -137,7 +164,7 @@ impl Server {
             }
 
             PacketType::Disconnect => {
-                self.kick(peer);
+                self.kick(peer).await;
             }
             _ => {}
         };
@@ -152,20 +179,20 @@ impl Server {
         Ok(())
     }
 
-    fn check_if_client_connected(&mut self, client: &ClientConnection) -> bool {
-        self.clients
+    async fn check_if_client_connected(&mut self, client: &ClientConnection) -> bool {
+        self.clients.lock().await
             .iter()
             .any(|item| item.get_address() == client.get_address())
     }
 
-    fn kick(&mut self, addr: SocketAddr) {
-        let client_index = self
-            .clients
+    async fn kick(&self, addr: SocketAddr) {
+        let mut clients = self.clients.lock().await;
+        let client_index = clients
             .iter_mut()
             .position(|client| client.get_address() == addr);
 
         if let Some(index) = client_index {
-            self.clients.remove(index);
+            clients.remove(index);
         }
     }
 
@@ -182,13 +209,13 @@ impl Server {
     }
 
     async fn acknowledge_packet(
-        &mut self,
+        &self,
         packet: PacketV1,
         payload: Option<Vec<u8>>,
         client_addr: SocketAddr,
     ) -> Result<(), &'static str> {
-        let found_client = self
-            .clients
+        let mut clients = self.clients.lock().await;
+        let found_client = clients
             .iter_mut()
             .find(|client| client.get_address() == client_addr);
 
@@ -254,12 +281,6 @@ impl Server {
         }
 
         Ok(())
-    }
-
-    fn find_client_from_pid(&mut self, pid: u32) -> Option<&mut ClientConnection> {
-        self.clients
-            .iter_mut()
-            .find(|client| client.get_pid() == pid)
     }
 
     async fn send(

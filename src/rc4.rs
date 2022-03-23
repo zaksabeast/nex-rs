@@ -4,6 +4,7 @@ use crypto::{
     symmetriccipher::{Decryptor, Encryptor},
 };
 
+#[derive(Clone)]
 pub struct Rc4 {
     inner: rc4::Rc4,
 }

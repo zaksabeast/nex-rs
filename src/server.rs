@@ -91,8 +91,7 @@ impl Server {
         self.ping_kick_thread = Some(tokio::spawn(async move {
             let mut invertal = time::interval(Duration::from_secs(3));
             invertal.tick().await;
-
-            let clients = clients;
+            
             loop {
                 invertal.tick().await;
                 let mut clients = clients.lock().await;

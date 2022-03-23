@@ -101,8 +101,16 @@ impl Server {
                     timer -= 1;
                     client.set_kick_timer(timer);
                 }
-                let clients_clone = clients.clone();
-                *clients = clients_clone.into_iter().filter(|c| c.get_kick_timer() == 0).collect::<Vec<ClientConnection>>()
+                *clients = clients
+                    .iter()
+                    .filter_map(|c| {
+                        if c.get_kick_timer() == 0 {
+                            None
+                        } else {
+                            Some(c.clone())
+                        }
+                    })
+                    .collect::<Vec<ClientConnection>>();
             }
         }));
 
@@ -171,7 +179,7 @@ impl Server {
 
         if flags.needs_ack()
             && (packet_type != PacketType::Connect
-                || (packet_type == PacketType::Connect && !packet.get_payload().is_empty()))
+            || (packet_type == PacketType::Connect && !packet.get_payload().is_empty()))
         {
             self.acknowledge_packet(packet, None, peer).await?;
         }
@@ -344,6 +352,6 @@ impl Server {
         } else {
             dummy_compression::compress(data)
         }
-        .to_vec()
+            .to_vec()
     }
 }

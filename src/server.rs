@@ -91,7 +91,7 @@ impl<Handler: EventHandler> Server<Handler> {
         self.prudp_version
     }
 
-    async fn listen(&mut self, addr: &str) -> Result<(), &'static str> {
+    pub async fn listen(&mut self, addr: &str) -> Result<(), &'static str> {
         let socket = UdpSocket::bind(addr)
             .await
             .map_err(|_| "Couldn't bind to address")?;

@@ -6,10 +6,10 @@
 mod client;
 mod compression;
 mod counter;
-mod kerberos;
-mod nex_types;
-mod packet;
+pub mod kerberos;
+pub mod nex_types;
+pub mod packet;
 mod rc4;
-mod rmc_request;
-mod server;
-mod stream;
+pub mod rmc_request;
+pub mod server;
+pub mod stream;

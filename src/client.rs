@@ -2,7 +2,7 @@ use crate::{
     counter::Counter,
     packet::{Packet, PacketV1},
     rc4::Rc4,
-    server::Server,
+    server::{EventHandler, Server},
 };
 use md5::{Digest, Md5};
 use std::net::SocketAddr;
@@ -51,9 +51,8 @@ pub struct ClientConnection {
     context: ClientContext,
 }
 
-
 impl ClientConnection {
-    pub fn new(address: SocketAddr, server: &Server) -> Self {
+    pub fn new<T: EventHandler>(address: SocketAddr, server: &Server<T>) -> Self {
         Self {
             address,
             secure_key: vec![],

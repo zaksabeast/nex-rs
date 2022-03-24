@@ -4,12 +4,12 @@
 #![allow(unused_variables)]
 
 mod client;
+mod compression;
 mod counter;
+mod kerberos;
+mod nex_types;
 mod packet;
 mod rc4;
 mod rmc_request;
 mod server;
 mod stream;
-mod compression;
-mod kerberos;
-mod nex_types;

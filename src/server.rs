@@ -14,7 +14,15 @@ use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 use tokio::time;
 
-pub struct Server {
+pub trait EventHandler: Default {
+    fn on_syn(&self, packet: &PacketV1) {}
+    fn on_connect(&self, packet: &PacketV1) {}
+    fn on_data(&self, packet: &PacketV1) {}
+    fn on_disconnect(&self, packet: &PacketV1) {}
+    fn on_ping(&self, packet: &PacketV1) {}
+}
+
+pub struct Server<Handler: EventHandler> {
     socket: Option<UdpSocket>,
     access_key: String,
     prudp_version: u32,
@@ -31,9 +39,10 @@ pub struct Server {
     connection_id_counter: Counter,
     ping_kick_thread: Option<JoinHandle<()>>,
     clients: Arc<Mutex<Vec<ClientConnection>>>,
+    handler: Handler,
 }
 
-impl Default for Server {
+impl<Handler: EventHandler> Default for Server<Handler> {
     fn default() -> Self {
         Self {
             socket: None,
@@ -52,11 +61,12 @@ impl Default for Server {
             connection_id_counter: Counter::default(),
             ping_kick_thread: None,
             clients: Arc::new(Mutex::new(vec![])),
+            handler: Handler::default(),
         }
     }
 }
 
-impl Server {
+impl<Handler: EventHandler> Server<Handler> {
     pub fn new() -> Self {
         Default::default()
     }
@@ -91,7 +101,7 @@ impl Server {
         self.ping_kick_thread = Some(tokio::spawn(async move {
             let mut invertal = time::interval(Duration::from_secs(3));
             invertal.tick().await;
-            
+
             loop {
                 invertal.tick().await;
                 let mut clients = clients.lock().await;
@@ -159,35 +169,46 @@ impl Server {
         }
 
         let packet_type = packet.get_packet_type();
+
+        if flags.needs_ack()
+            && (packet_type != PacketType::Connect
+                || (packet_type == PacketType::Connect && !packet.get_payload().is_empty()))
+        {
+            self.acknowledge_packet(&packet, None, peer).await?;
+        }
+
         match packet_type {
             PacketType::Syn => {
                 client.reset();
                 client.set_is_connected(true);
                 client.set_kick_timer(Some(self.ping_timeout));
+                self.handler.on_syn(&packet);
             }
             PacketType::Connect => {
                 let client_connection_signature = packet.get_connection_signature().to_vec();
                 client.set_client_connection_signature(client_connection_signature);
+                self.handler.on_connect(&packet);
             }
 
             PacketType::Disconnect => {
                 self.kick(peer).await;
+                self.handler.on_disconnect(&packet);
             }
-            _ => {}
+            PacketType::Data => {
+                self.handler.on_data(&packet);
+            }
+            PacketType::Ping => {
+                self.handler.on_ping(&packet);
+            }
         };
-
-        if flags.needs_ack()
-            && (packet_type != PacketType::Connect
-            || (packet_type == PacketType::Connect && !packet.get_payload().is_empty()))
-        {
-            self.acknowledge_packet(packet, None, peer).await?;
-        }
 
         Ok(())
     }
 
     async fn check_if_client_connected(&mut self, client: &ClientConnection) -> bool {
-        self.clients.lock().await
+        self.clients
+            .lock()
+            .await
             .iter()
             .any(|item| item.get_address() == client.get_address())
     }
@@ -217,7 +238,7 @@ impl Server {
 
     async fn acknowledge_packet(
         &self,
-        packet: PacketV1,
+        packet: &PacketV1,
         payload: Option<Vec<u8>>,
         client_addr: SocketAddr,
     ) -> Result<(), &'static str> {

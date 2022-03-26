@@ -2,7 +2,7 @@ use crate::{
     counter::Counter,
     packet::{Packet, PacketV1},
     rc4::Rc4,
-    server::{EventHandler, Server},
+    server::ServerSettings,
 };
 use md5::{Digest, Md5};
 use std::net::SocketAddr;
@@ -54,7 +54,7 @@ pub struct ClientConnection {
 }
 
 impl ClientConnection {
-    pub fn new<T: EventHandler>(address: SocketAddr, server: &Server<T>) -> Self {
+    pub fn new(address: SocketAddr, settings: &ServerSettings) -> Self {
         Self {
             address,
             secure_key: vec![],
@@ -67,11 +67,11 @@ impl ClientConnection {
             sequence_id_out: Counter::default(),
             kick_timer: None,
             context: ClientContext {
-                access_key: server.get_access_key(),
+                access_key: settings.get_access_key(),
                 cipher: Rc4::new(&[0]),
                 decipher: Rc4::new(&[0]),
-                flags_version: server.get_flags_version(),
-                prudp_version: server.get_prudp_version(),
+                flags_version: settings.get_flags_version(),
+                prudp_version: settings.get_prudp_version(),
                 server_connection_signature: vec![],
                 client_connection_signature: vec![],
                 signature_key: vec![],
@@ -95,6 +95,10 @@ impl ClientConnection {
 
     pub fn set_server_connection_signature(&mut self, server_connection_signature: Vec<u8>) {
         self.context.server_connection_signature = server_connection_signature;
+    }
+
+    pub fn get_server_connection_signature(&mut self) -> &[u8] {
+        &self.context.server_connection_signature
     }
 
     pub fn set_is_connected(&mut self, is_connected: bool) {

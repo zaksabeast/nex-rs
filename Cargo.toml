@@ -9,6 +9,7 @@ edition = "2021"
 mocktopus = "0.7.11"
 
 [dependencies]
+async-trait = "0.1.52"
 hmac = "0.12.1"
 md-5 = "0.10.1"
 miniz_oxide = "0.5.1"

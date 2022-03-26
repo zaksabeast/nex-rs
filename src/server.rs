@@ -207,7 +207,7 @@ impl<Handler: EventHandler> Server<Handler> {
 
         if flags.needs_ack()
             && (packet_type != PacketType::Connect
-                || (packet_type == PacketType::Connect && !packet.get_payload().is_empty()))
+            || (packet_type == PacketType::Connect && packet.get_payload().is_empty()))
         {
             self.acknowledge_packet(&packet, None, client).await?;
         }

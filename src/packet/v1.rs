@@ -209,9 +209,8 @@ impl PacketV1 {
             self.base.payload = stream.default_read_byte_stream(payload_size);
 
             if self.base.packet_type == PacketType::Data && !self.base.flags.multi_ack() {
-                let out: Vec<u8> = vec![0; payload_size];
-                self.base.payload = context.decipher.decrypt(&self.base.payload)?;
-                self.base.rmc_request = self.base.payload.as_slice().try_into()?;
+                let mut out: Vec<u8> = context.decipher.decrypt(&self.base.payload)?;
+                self.base.rmc_request = out.as_slice().try_into()?;
             }
         }
 

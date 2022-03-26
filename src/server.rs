@@ -226,13 +226,28 @@ pub trait Server: EventHandler {
                 let mut connection_signature = vec![0; 16];
                 rand::thread_rng().fill_bytes(&mut connection_signature);
                 client.set_server_connection_signature(connection_signature.clone());
-
-                self.on_syn(client, &packet);
             }
             PacketType::Connect => {
                 let client_connection_signature = packet.get_connection_signature().to_vec();
                 client.set_client_connection_signature(client_connection_signature);
                 client.update_access_key(self.get_access_key());
+            }
+            _ => {}
+        }
+
+        if flags.needs_ack()
+            && (packet_type != PacketType::Connect
+                || (packet_type == PacketType::Connect && packet.get_payload().is_empty()))
+        {
+            let nex_version = self.get_base().settings.nex_version;
+            Self::acknowledge_packet(socket, &packet, client, nex_version, None).await?;
+        }
+
+        match packet_type {
+            PacketType::Syn => {
+                self.on_syn(client, &packet);
+            }
+            PacketType::Connect => {
                 self.on_connect(client, &packet);
             }
             PacketType::Disconnect => {
@@ -245,14 +260,6 @@ pub trait Server: EventHandler {
                 self.on_ping(client, &packet);
             }
         };
-
-        if flags.needs_ack()
-            && (packet_type != PacketType::Connect
-                || (packet_type == PacketType::Connect && packet.get_payload().is_empty()))
-        {
-            let nex_version = self.get_base().settings.nex_version;
-            Self::acknowledge_packet(socket, &packet, client, nex_version, None).await?;
-        }
 
         if packet_type == PacketType::Disconnect {
             let addr = client.get_address();

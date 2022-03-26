@@ -3,10 +3,10 @@ use no_std_io::StreamReader;
 
 #[derive(Default, Debug)]
 pub struct RMCRequest {
-    protocol_id: u8,
-    call_id: u32,
-    method_id: u32,
-    parameters: Vec<u8>,
+    pub protocol_id: u8,
+    pub call_id: u32,
+    pub method_id: u32,
+    pub parameters: Vec<u8>,
 }
 
 impl TryFrom<&[u8]> for RMCRequest {

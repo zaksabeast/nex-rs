@@ -111,6 +111,10 @@ pub trait Server: EventHandler {
         self.get_mut_base().settings.access_key = access_key;
     }
 
+    fn set_nex_version(&mut self, nex_version: u32) {
+        self.get_mut_base().settings.nex_version = nex_version;
+    }
+
     fn get_checksum_version(&self) -> u32 {
         self.get_base().settings.checksum_version
     }
@@ -301,6 +305,8 @@ pub trait Server: EventHandler {
                 ack_packet.set_payload(payload);
             }
         }
+        ack_packet.set_substream_id(0);
+        ack_packet.set_version(1);
 
         match ack_packet.get_packet_type() {
             PacketType::Syn => {
@@ -337,8 +343,6 @@ pub trait Server: EventHandler {
             }
             _ => {}
         };
-
-        ack_packet.set_substream_id(0);
 
         let encoded_packet = &client.encode_packet(&mut ack_packet);
         Self::send_raw(socket, client, encoded_packet).await?;

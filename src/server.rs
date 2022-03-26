@@ -16,11 +16,11 @@ use tokio::task::JoinHandle;
 use tokio::time;
 
 pub trait EventHandler {
-    fn on_syn(&self, packet: &PacketV1) {}
-    fn on_connect(&self, packet: &PacketV1) {}
-    fn on_data(&self, packet: &PacketV1) {}
-    fn on_disconnect(&self, packet: &PacketV1) {}
-    fn on_ping(&self, packet: &PacketV1) {}
+    fn on_syn(&self, client: &mut ClientConnection, packet: &PacketV1) {}
+    fn on_connect(&self, client: &mut ClientConnection, packet: &PacketV1) {}
+    fn on_data(&self, client: &mut ClientConnection, packet: &PacketV1) {}
+    fn on_disconnect(&self, client: &mut ClientConnection, packet: &PacketV1) {}
+    fn on_ping(&self, client: &mut ClientConnection, packet: &PacketV1) {}
 }
 
 pub struct ServerSettings {
@@ -227,22 +227,22 @@ pub trait Server: EventHandler {
                 rand::thread_rng().fill_bytes(&mut connection_signature);
                 client.set_server_connection_signature(connection_signature.clone());
 
-                self.on_syn(&packet);
+                self.on_syn(client, &packet);
             }
             PacketType::Connect => {
                 let client_connection_signature = packet.get_connection_signature().to_vec();
                 client.set_client_connection_signature(client_connection_signature);
                 client.update_access_key(self.get_access_key());
-                self.on_connect(&packet);
+                self.on_connect(client, &packet);
             }
             PacketType::Disconnect => {
-                self.on_disconnect(&packet);
+                self.on_disconnect(client, &packet);
             }
             PacketType::Data => {
-                self.on_data(&packet);
+                self.on_data(client, &packet);
             }
             PacketType::Ping => {
-                self.on_ping(&packet);
+                self.on_ping(client, &packet);
             }
         };
 

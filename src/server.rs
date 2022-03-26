@@ -218,6 +218,11 @@ pub trait Server: EventHandler {
                 client.reset();
                 client.set_is_connected(true);
                 client.set_kick_timer(Some(base.settings.ping_timeout));
+
+                let mut connection_signature = vec![0; 16];
+                rand::thread_rng().fill_bytes(&mut connection_signature);
+                client.set_server_connection_signature(connection_signature.clone());
+
                 self.on_syn(&packet);
             }
             PacketType::Connect => {
@@ -299,10 +304,8 @@ pub trait Server: EventHandler {
 
         match ack_packet.get_packet_type() {
             PacketType::Syn => {
-                let mut connection_signature = vec![0; 16];
-                rand::thread_rng().fill_bytes(&mut connection_signature);
-                client.set_server_connection_signature(connection_signature.clone());
-                ack_packet.set_connection_signature(connection_signature);
+                ack_packet
+                    .set_connection_signature(client.get_server_connection_signature().to_vec());
                 ack_packet.set_supported_functions(packet.get_supported_functions());
                 ack_packet.set_maximum_substream_id(0);
             }

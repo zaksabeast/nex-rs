@@ -1,7 +1,7 @@
 use crate::stream::StreamIn;
 use no_std_io::StreamReader;
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct RMCRequest {
     protocol_id: u8,
     call_id: u32,

@@ -7,6 +7,7 @@ use hmac::{Hmac, Mac};
 use md5::Md5;
 use no_std_io::{Cursor, StreamContainer, StreamReader, StreamWriter};
 
+#[derive(Debug)]
 pub struct PacketV1 {
     base: BasePacket,
     magic: u16,
@@ -70,14 +71,21 @@ impl Packet for PacketV1 {
         stream.checked_write_stream_le(&payload_len);
         stream.checked_write_stream(&self.base.source);
         stream.checked_write_stream(&self.base.destination);
-        stream.checked_write_stream(&type_flags);
+        stream.checked_write_stream_le(&type_flags);
         stream.checked_write_stream(&self.base.session_id);
         stream.checked_write_stream(&self.substream_id);
-        stream.checked_write_stream(&self.base.sequence_id);
+        stream.checked_write_stream_le(&self.base.sequence_id);
 
+        let header = &stream.get_slice()[2..14];
         let signature = self
-            .calculate_signature(&options, context)
+            .calculate_signature(
+                header,
+                &context.client_connection_signature,
+                &options,
+                context,
+            )
             .expect("Signature could not be calculated");
+
         stream.checked_write_stream_bytes(&signature);
 
         if options_len > 0 {
@@ -98,7 +106,7 @@ impl PacketV1 {
 
         let mut packet = Self {
             base: BasePacket::new(data, 1),
-            magic: 0,
+            magic: 0xd0ea,
             substream_id: 0,
             supported_functions: 0,
             initial_sequence_id: 0,
@@ -142,14 +150,14 @@ impl PacketV1 {
 
     fn decode(&mut self, context: &mut ClientContext) -> Result<(), &'static str> {
         let data_len = self.base.data.len();
-        let data = self.base.data.as_slice();
+        let data = self.base.data.clone();
 
         // magic + header + signature
         if data_len < 30 {
             return Err("Packet length is too small!");
         }
 
-        let mut stream = StreamContainer::new(data);
+        let mut stream = StreamContainer::new(data.as_slice());
 
         self.magic = stream.default_read_stream();
 
@@ -186,7 +194,7 @@ impl PacketV1 {
 
         self.base.session_id = stream.default_read_stream();
         self.substream_id = stream.default_read_stream();
-        self.base.sequence_id = stream.default_read_stream();
+        self.base.sequence_id = stream.default_read_stream_le();
         self.base.signature = stream.default_read_byte_stream(16);
 
         if data_len < stream.get_index() + options_length {
@@ -194,6 +202,8 @@ impl PacketV1 {
         }
 
         let options = stream.default_read_byte_stream(options_length);
+
+        self.decode_options(&options)?;
 
         if payload_size > 0 {
             self.base.payload = stream.default_read_byte_stream(payload_size);
@@ -205,20 +215,23 @@ impl PacketV1 {
             }
         }
 
-        let calculated_signature = self.calculate_signature(&options, context)?;
+        let header = &data[2..14];
+        let calculated_signature = self.calculate_signature(
+            &header,
+            &context.server_connection_signature,
+            &options,
+            context,
+        )?;
 
-        if calculated_signature == self.base.signature {
+        if calculated_signature != self.base.signature {
             return Err("Calculated signature did not match");
         }
-
-        self.decode_options(&options)?;
 
         Ok(())
     }
 
     pub fn decode_options(&mut self, options: &[u8]) -> Result<(), &'static str> {
         let mut options_stream = StreamIn::new(options);
-
         let options_len = options.len();
 
         let mut i = 0;
@@ -245,7 +258,7 @@ impl PacketV1 {
                     self.base.fragment_id = options_stream.default_read_stream();
                 }
                 PacketOption::InitialSequenceId => {
-                    self.initial_sequence_id = options_stream.default_read_stream();
+                    self.initial_sequence_id = options_stream.default_read_stream_le();
                 }
                 PacketOption::MaxSubstreamId => {
                     self.maximum_substream_id = options_stream.default_read_stream();
@@ -265,7 +278,7 @@ impl PacketV1 {
         {
             stream.checked_write_stream::<u8>(&u8::from(PacketOption::SupportedFunctions));
             stream.checked_write_stream(&4u8);
-            stream.checked_write_stream(&self.supported_functions);
+            stream.checked_write_stream_le(&self.supported_functions);
 
             stream.checked_write_stream::<u8>(&u8::from(PacketOption::ConnectionSignature));
             stream.checked_write_stream(&16u8);
@@ -274,7 +287,7 @@ impl PacketV1 {
             if self.base.packet_type == PacketType::Connect {
                 stream.checked_write_stream::<u8>(&u8::from(PacketOption::InitialSequenceId));
                 stream.checked_write_stream(&2u8);
-                stream.checked_write_stream(&self.initial_sequence_id);
+                stream.checked_write_stream_le(&self.initial_sequence_id);
             }
 
             stream.checked_write_stream::<u8>(&u8::from(PacketOption::MaxSubstreamId));
@@ -291,15 +304,15 @@ impl PacketV1 {
 
     pub fn calculate_signature(
         &self,
+        header: &[u8],
+        connection_signature: &[u8],
         options: &[u8],
         context: &ClientContext,
     ) -> Result<Vec<u8>, &'static str> {
-        if self.base.data.len() < 14 {
-            return Err("Packet data length is too small");
+        if header.len() < 8 {
+            return Err("Header is too small");
         }
 
-        let header = &self.base.data[6..14];
-        let connection_signature = &self.base.connection_signature;
         let payload = &self.base.payload;
         let key = &context.signature_key;
         let signature_base = context.signature_base;

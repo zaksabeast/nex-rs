@@ -14,6 +14,8 @@ pub struct ClientContext {
     pub decipher: Rc4,
     pub flags_version: u32,
     pub prudp_version: u32,
+    pub server_connection_signature: Vec<u8>,
+    pub client_connection_signature: Vec<u8>,
     pub signature_key: Vec<u8>,
     pub signature_base: u32,
     pub session_key: Vec<u8>,
@@ -27,6 +29,8 @@ impl Default for ClientContext {
             decipher: Rc4::new(&[0]),
             flags_version: 1,
             prudp_version: 1,
+            server_connection_signature: vec![],
+            client_connection_signature: vec![],
             signature_key: vec![],
             signature_base: 0,
             session_key: vec![],
@@ -38,8 +42,6 @@ impl Default for ClientContext {
 pub struct ClientConnection {
     address: SocketAddr,
     secure_key: Vec<u8>,
-    server_connection_signature: Vec<u8>,
-    client_connection_signature: Vec<u8>,
     session_id: u32,
     pid: u32,
     local_station_url: String,
@@ -56,8 +58,6 @@ impl ClientConnection {
         Self {
             address,
             secure_key: vec![],
-            server_connection_signature: vec![],
-            client_connection_signature: vec![],
             session_id: 0,
             pid: 0,
             local_station_url: "".to_string(),
@@ -72,6 +72,8 @@ impl ClientConnection {
                 decipher: Rc4::new(&[0]),
                 flags_version: server.get_flags_version(),
                 prudp_version: server.get_prudp_version(),
+                server_connection_signature: vec![],
+                client_connection_signature: vec![],
                 signature_key: vec![],
                 signature_base: 0,
                 session_key: vec![],
@@ -88,11 +90,11 @@ impl ClientConnection {
     }
 
     pub fn set_client_connection_signature(&mut self, client_connection_signature: Vec<u8>) {
-        self.client_connection_signature = client_connection_signature;
+        self.context.client_connection_signature = client_connection_signature;
     }
 
     pub fn set_server_connection_signature(&mut self, server_connection_signature: Vec<u8>) {
-        self.server_connection_signature = server_connection_signature;
+        self.context.server_connection_signature = server_connection_signature;
     }
 
     pub fn set_is_connected(&mut self, is_connected: bool) {
@@ -138,8 +140,9 @@ impl ClientConnection {
         self.context.decipher = Rc4::new(rc4_key);
     }
 
-    fn update_access_key(&mut self, access_key: String) {
-        self.context.signature_base = access_key.as_bytes().iter().map(|&i| i as u32).sum();
+    pub fn update_access_key(&mut self, access_key: String) {
+        self.context.signature_base = access_key.as_bytes().iter().map(|byte| *byte as u32).sum();
+
         let mut md5 = Md5::new();
 
         md5.update(access_key.as_bytes());

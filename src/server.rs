@@ -6,6 +6,7 @@ use crate::{
     stream::StreamOut,
 };
 use no_std_io::StreamWriter;
+use rand::RngCore;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
@@ -79,6 +80,10 @@ impl<Handler: EventHandler> Server<Handler> {
         self.access_key.to_string()
     }
 
+    pub fn set_access_key(&mut self, access_key: String) {
+        self.access_key = access_key;
+    }
+
     pub fn get_checksum_version(&self) -> u32 {
         self.checksum_version
     }
@@ -105,11 +110,13 @@ impl<Handler: EventHandler> Server<Handler> {
             loop {
                 invertal.tick().await;
                 let mut clients = clients.lock().await;
+
                 for client in clients.iter_mut() {
                     if let Some(timer) = client.get_kick_timer() {
                         client.set_kick_timer(Some(timer.saturating_sub(3)));
                     }
                 }
+
                 *clients = clients
                     .iter()
                     .filter_map(|c| {
@@ -131,8 +138,8 @@ impl<Handler: EventHandler> Server<Handler> {
         }
     }
 
-    async fn handle_socket_message(&mut self) -> Result<(), &'static str> {
-        let mut buf: Vec<u8> = vec![];
+    async fn handle_socket_message(&self) -> Result<(), &'static str> {
+        let mut buf: Vec<u8> = vec![0; 0x200];
         let socket = match &self.socket {
             Some(socket) => Ok(socket),
             None => Err("No socket"),
@@ -143,6 +150,8 @@ impl<Handler: EventHandler> Server<Handler> {
             .await
             .map_err(|_| "UDP Receive error")?;
 
+        buf.resize(receive_size, 0);
+
         let mut clients = self.clients.lock().await;
 
         let found_client = clients
@@ -152,7 +161,8 @@ impl<Handler: EventHandler> Server<Handler> {
         let client = match found_client {
             Some(client) => client,
             None => {
-                let new_client = ClientConnection::new(peer, self);
+                let mut new_client = ClientConnection::new(peer, self);
+                new_client.update_access_key(self.get_access_key());
                 clients.push(new_client);
                 // We just pushed a client, so we know one exists
                 clients.last_mut().unwrap()
@@ -161,7 +171,7 @@ impl<Handler: EventHandler> Server<Handler> {
 
         let packet = client.new_packet(buf)?;
 
-        self.increase_ping_timeout_time(client.get_address()).await;
+        self.increase_ping_timeout_time(client);
 
         let flags = packet.get_flags();
         if flags.ack() || flags.multi_ack() {
@@ -169,13 +179,6 @@ impl<Handler: EventHandler> Server<Handler> {
         }
 
         let packet_type = packet.get_packet_type();
-
-        if flags.needs_ack()
-            && (packet_type != PacketType::Connect
-                || (packet_type == PacketType::Connect && !packet.get_payload().is_empty()))
-        {
-            self.acknowledge_packet(&packet, None, peer).await?;
-        }
 
         match packet_type {
             PacketType::Syn => {
@@ -187,9 +190,9 @@ impl<Handler: EventHandler> Server<Handler> {
             PacketType::Connect => {
                 let client_connection_signature = packet.get_connection_signature().to_vec();
                 client.set_client_connection_signature(client_connection_signature);
+                client.update_access_key(self.get_access_key());
                 self.handler.on_connect(&packet);
             }
-
             PacketType::Disconnect => {
                 self.kick(peer).await;
                 self.handler.on_disconnect(&packet);
@@ -201,6 +204,13 @@ impl<Handler: EventHandler> Server<Handler> {
                 self.handler.on_ping(&packet);
             }
         };
+
+        if flags.needs_ack()
+            && (packet_type != PacketType::Connect
+                || (packet_type == PacketType::Connect && !packet.get_payload().is_empty()))
+        {
+            self.acknowledge_packet(&packet, None, client).await?;
+        }
 
         Ok(())
     }
@@ -240,73 +250,65 @@ impl<Handler: EventHandler> Server<Handler> {
         &self,
         packet: &PacketV1,
         payload: Option<Vec<u8>>,
-        client_addr: SocketAddr,
+        client: &mut ClientConnection,
     ) -> Result<(), &'static str> {
-        let mut clients = self.clients.lock().await;
-        let found_client = clients
-            .iter_mut()
-            .find(|client| client.get_address() == client_addr);
+        let mut ack_packet = client.new_packet(vec![])?;
 
-        if let Some(client) = found_client {
-            let mut ack_packet = client.new_packet(vec![])?;
+        ack_packet.set_source(packet.get_destination());
+        ack_packet.set_destination(packet.get_source());
+        ack_packet.set_packet_type(packet.get_packet_type());
+        ack_packet.set_sequence_id(packet.get_sequence_id());
+        ack_packet.set_fragment_id(packet.get_fragment_id());
+        ack_packet.set_flags(PacketFlag::Ack | PacketFlag::HasSize);
 
-            ack_packet.set_source(packet.get_destination());
-            ack_packet.set_destination(packet.get_source());
-            ack_packet.set_packet_type(packet.get_packet_type());
-            ack_packet.set_sequence_id(packet.get_sequence_id());
-            ack_packet.set_fragment_id(packet.get_fragment_id());
-            ack_packet.set_flags(PacketFlag::Ack | PacketFlag::HasSize);
-
-            if let Some(payload) = payload {
-                if !payload.is_empty() {
-                    ack_packet.set_payload(payload);
-                }
+        if let Some(payload) = payload {
+            if !payload.is_empty() {
+                ack_packet.set_payload(payload);
             }
-
-            match ack_packet.get_packet_type() {
-                PacketType::Syn => {
-                    // TODO: Get signature from random bytes
-                    let connection_signature = vec![0; 16];
-
-                    client.set_client_connection_signature(connection_signature.clone());
-                    ack_packet.set_connection_signature(connection_signature);
-                    ack_packet.set_supported_functions(packet.get_supported_functions());
-                    ack_packet.set_maximum_substream_id(0);
-                }
-                PacketType::Connect => {
-                    ack_packet.set_connection_signature(vec![0; 16]);
-                    ack_packet.set_supported_functions(packet.get_supported_functions());
-                    ack_packet.set_initial_sequence_id(10000);
-                    ack_packet.set_maximum_substream_id(0);
-                }
-                PacketType::Data => {
-                    // Aggregate acknowledgement
-                    ack_packet.get_mut_flags().clear_flag(PacketFlag::Ack);
-                    ack_packet.get_mut_flags().set_flag(PacketFlag::MultiAck);
-
-                    let mut payload_stream = StreamOut::new();
-
-                    // New version
-                    if self.nex_version >= 2 {
-                        ack_packet.set_sequence_id(0);
-                        ack_packet.set_substream_id(1);
-
-                        // We're going to mimic nex-go and do one ack packet
-                        payload_stream.checked_write_stream(&0u8); // substream id
-                        payload_stream.checked_write_stream(&0u8); // length of additional sequence ids
-                        payload_stream.checked_write_stream_le(&packet.get_sequence_id());
-                    }
-
-                    ack_packet.set_payload(payload_stream.into())
-                }
-                _ => {}
-            };
-
-            ack_packet.set_substream_id(0);
-
-            let encoded_packet = &client.encode_packet(&mut ack_packet);
-            self.send_raw(client_addr, encoded_packet).await?;
         }
+
+        match ack_packet.get_packet_type() {
+            PacketType::Syn => {
+                let mut connection_signature = vec![0; 16];
+                rand::thread_rng().fill_bytes(&mut connection_signature);
+                client.set_server_connection_signature(connection_signature.clone());
+                ack_packet.set_connection_signature(connection_signature);
+                ack_packet.set_supported_functions(packet.get_supported_functions());
+                ack_packet.set_maximum_substream_id(0);
+            }
+            PacketType::Connect => {
+                ack_packet.set_connection_signature(vec![0; 16]);
+                ack_packet.set_supported_functions(packet.get_supported_functions());
+                ack_packet.set_initial_sequence_id(10000);
+                ack_packet.set_maximum_substream_id(0);
+            }
+            PacketType::Data => {
+                // Aggregate acknowledgement
+                ack_packet.get_mut_flags().clear_flag(PacketFlag::Ack);
+                ack_packet.get_mut_flags().set_flag(PacketFlag::MultiAck);
+
+                let mut payload_stream = StreamOut::new();
+
+                // New version
+                if self.nex_version >= 2 {
+                    ack_packet.set_sequence_id(0);
+                    ack_packet.set_substream_id(1);
+
+                    // We're going to mimic nex-go and do one ack packet
+                    payload_stream.checked_write_stream(&0u8); // substream id
+                    payload_stream.checked_write_stream(&0u8); // length of additional sequence ids
+                    payload_stream.checked_write_stream_le(&packet.get_sequence_id());
+                }
+
+                ack_packet.set_payload(payload_stream.into())
+            }
+            _ => {}
+        };
+
+        ack_packet.set_substream_id(0);
+
+        let encoded_packet = &client.encode_packet(&mut ack_packet);
+        self.send_raw(client.get_address(), encoded_packet).await?;
 
         Ok(())
     }
@@ -374,14 +376,7 @@ impl<Handler: EventHandler> Server<Handler> {
         }
     }
 
-    async fn increase_ping_timeout_time(&self, peer: SocketAddr) {
-        let mut clients = self.clients.lock().await;
-        let found_client = clients
-            .iter_mut()
-            .find(|client| client.get_address() == peer);
-
-        if let Some(client) = found_client {
-            client.set_kick_timer(Some(self.ping_timeout));
-        }
+    fn increase_ping_timeout_time(&self, client: &mut ClientConnection) {
+        client.set_kick_timer(Some(self.ping_timeout));
     }
 }

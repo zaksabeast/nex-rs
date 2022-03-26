@@ -1,7 +1,13 @@
-use no_std_io::{Cursor, EndianWrite, StreamContainer, StreamWriter, Writer, WriterResult};
+use no_std_io::{Cursor, EndianWrite, Reader, StreamContainer, StreamWriter, Writer, WriterResult};
 
 pub struct StreamOut {
     data: StreamContainer<Vec<u8>>,
+}
+
+impl StreamOut {
+    pub fn get_slice(&self) -> &[u8] {
+        self.data.get_slice()
+    }
 }
 
 impl Writer for StreamOut {
@@ -107,5 +113,15 @@ impl StreamOut {
 impl From<StreamOut> for Vec<u8> {
     fn from(stream: StreamOut) -> Self {
         stream.data.into_raw()
+    }
+}
+
+impl From<Vec<u8>> for StreamOut {
+    fn from(data: Vec<u8>) -> Self {
+        let len = data.len();
+        let mut container = StreamContainer::new(data);
+        container.set_index(len);
+
+        Self { data: container }
     }
 }

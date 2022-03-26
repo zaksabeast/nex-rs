@@ -1,6 +1,7 @@
 use super::{PacketFlags, PacketType};
 use crate::rmc_request::RMCRequest;
 
+#[derive(Debug)]
 pub struct BasePacket {
     pub(super) data: Vec<u8>,
     pub(super) version: u8,

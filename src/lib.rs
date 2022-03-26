@@ -3,7 +3,7 @@
 // Temporarily allow unused variables while building
 #![allow(unused_variables)]
 
-mod client;
+pub mod client;
 mod compression;
 mod counter;
 pub mod kerberos;

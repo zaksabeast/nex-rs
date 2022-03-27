@@ -7,14 +7,15 @@ pub trait StructureInterface {
         stream: &mut StreamIn<T>,
     ) -> Result<(), &'static str>;
 
-    fn bytes(&self, stream: StreamOut) -> Vec<u8>;
+    fn bytes(&self, stream: &mut StreamOut) -> Result<(), &'static str>;
 }
 
+#[derive(Default)]
 pub struct NullData;
 
 impl NullData {
     pub fn new() -> Self {
-        Self {}
+        Self::default()
     }
 }
 
@@ -26,11 +27,12 @@ impl StructureInterface for NullData {
         Ok(())
     }
 
-    fn bytes(&self, stream: StreamOut) -> Vec<u8> {
-        vec![]
+    fn bytes(&self, stream: &mut StreamOut) -> Result<(), &'static str> {
+        Ok(())
     }
 }
 
+#[derive(Default)]
 pub struct RVConnectionData {
     station_url: String,
     special_protocols: Vec<u8>,
@@ -40,12 +42,7 @@ pub struct RVConnectionData {
 
 impl RVConnectionData {
     pub fn new() -> Self {
-        Self {
-            station_url: String::new(),
-            special_protocols: Vec::new(),
-            station_url_special_protocols: String::new(),
-            time: 0,
-        }
+        Self::default()
     }
 
     pub fn set_station_url(&mut self, station_url: String) {
@@ -73,13 +70,12 @@ impl StructureInterface for RVConnectionData {
         unimplemented!()
     }
 
-    fn bytes(&self, mut stream: StreamOut) -> Vec<u8> {
+    fn bytes(&self, stream: &mut StreamOut) -> Result<(), &'static str> {
         stream.write_string(&self.station_url);
         stream.checked_write_stream_le(&0_u32);
         stream.write_string(&self.station_url_special_protocols);
         stream.checked_write_stream_le(&self.time);
-
-        stream.into()
+        Ok(())
     }
 }
 
@@ -390,9 +386,9 @@ impl ResultCode {
         Ok(())
     }
 
-    pub fn bytes(&self, mut stream: StreamOut) -> Vec<u8> {
+    pub fn bytes(&self, stream: &mut StreamOut) -> Result<(), &'static str> {
         stream.checked_write_stream_le(&self.0);
-        stream.into()
+        Ok(())
     }
 }
 
@@ -432,8 +428,8 @@ impl StructureInterface for ResultRange {
         Ok(())
     }
 
-    fn bytes(&self, stream: StreamOut) -> Vec<u8> {
-        unimplemented!()
+    fn bytes(&self, stream: &mut StreamOut) -> Result<(), &'static str> {
+        Ok(())
     }
 }
 
@@ -459,12 +455,14 @@ impl<T: StructureInterface> StructureInterface for DataHolder<T> {
         unimplemented!()
     }
 
-    fn bytes(&self, mut stream: StreamOut) -> Vec<u8> {
-        let content = self.object.bytes(StreamOut::new());
+    fn bytes(&self, stream: &mut StreamOut) -> Result<(), &'static str> {
+        let mut content = StreamOut::new();
+        self.object.bytes(&mut content)?;
 
         stream.write_string(&self.name);
-        stream.checked_write_stream_le(&(content.len() as u32 + 4_u32));
-        stream.write_buffer(&content);
-        stream.into()
+        stream.checked_write_stream_le(&(content.get_slice().len() as u32 + 4_u32));
+        stream.write_buffer(content.get_slice());
+
+        Ok(())
     }
 }

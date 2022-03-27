@@ -2,10 +2,10 @@ use crate::stream::{StreamIn, StreamOut};
 use no_std_io::{EndianRead, Reader, StreamReader, StreamWriter};
 
 pub trait StructureInterface {
-    fn extract_from_stream<T: Reader>(
-        &mut self,
-        stream: &mut StreamIn<T>,
-    ) -> Result<(), &'static str>;
+    fn extract_from_stream<T: Reader>(stream: &mut StreamIn<T>) -> Result<Self, &'static str>
+    where
+        Self: StructureInterface,
+        Self: Sized;
 
     fn bytes(&self, stream: &mut StreamOut) -> Result<(), &'static str>;
 }
@@ -20,11 +20,8 @@ impl NullData {
 }
 
 impl StructureInterface for NullData {
-    fn extract_from_stream<T: Reader>(
-        &mut self,
-        stream: &mut StreamIn<T>,
-    ) -> Result<(), &'static str> {
-        Ok(())
+    fn extract_from_stream<T: Reader>(stream: &mut StreamIn<T>) -> Result<Self, &'static str> {
+        Ok(Self {})
     }
 
     fn bytes(&self, stream: &mut StreamOut) -> Result<(), &'static str> {
@@ -63,10 +60,7 @@ impl RVConnectionData {
 }
 
 impl StructureInterface for RVConnectionData {
-    fn extract_from_stream<T: Reader>(
-        &mut self,
-        stream: &mut StreamIn<T>,
-    ) -> Result<(), &'static str> {
+    fn extract_from_stream<T: Reader>(stream: &mut StreamIn<T>) -> Result<Self, &'static str> {
         unimplemented!()
     }
 
@@ -413,19 +407,16 @@ impl ResultRange {
 }
 
 impl StructureInterface for ResultRange {
-    fn extract_from_stream<T: Reader>(
-        &mut self,
-        stream: &mut StreamIn<T>,
-    ) -> Result<(), &'static str> {
-        self.offset = stream
+    fn extract_from_stream<T: Reader>(stream: &mut StreamIn<T>) -> Result<Self, &'static str> {
+        let offset = stream
             .read_stream_le()
             .map_err(|_| "Offset could not be read")?;
 
-        self.length = stream
+        let length = stream
             .read_stream_le()
             .map_err(|_| "Length could not be read")?;
 
-        Ok(())
+        Ok(Self { offset, length })
     }
 
     fn bytes(&self, stream: &mut StreamOut) -> Result<(), &'static str> {
@@ -448,10 +439,7 @@ impl<T: StructureInterface> DataHolder<T> {
 }
 
 impl<T: StructureInterface> StructureInterface for DataHolder<T> {
-    fn extract_from_stream<U: Reader>(
-        &mut self,
-        stream: &mut StreamIn<U>,
-    ) -> Result<(), &'static str> {
+    fn extract_from_stream<U: Reader>(stream: &mut StreamIn<U>) -> Result<Self, &'static str> {
         unimplemented!()
     }
 

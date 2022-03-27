@@ -81,9 +81,7 @@ impl<T: Reader> StreamIn<T> {
         list
     }
 
-    pub fn read_struct<S: StructureInterface + Default>(&mut self) -> Result<S, &'static str> {
-        let mut value = S::default();
-        value.extract_from_stream(self)?;
-        Ok(value)
+    pub fn read_struct<S: StructureInterface>(&mut self) -> Result<S, &'static str> {
+        S::extract_from_stream(self)
     }
 }

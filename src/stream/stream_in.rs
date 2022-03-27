@@ -1,3 +1,4 @@
+use crate::nex_types::StructureInterface;
 use no_std_io::{Cursor, EndianRead, Reader, StreamContainer, StreamReader};
 
 pub struct StreamIn<T: Reader> {
@@ -78,5 +79,11 @@ impl<T: Reader> StreamIn<T> {
         }
 
         list
+    }
+
+    pub fn read_struct<S: StructureInterface + Default>(&mut self) -> Result<S, &'static str> {
+        let mut value = S::default();
+        value.extract_from_stream(self)?;
+        Ok(value)
     }
 }

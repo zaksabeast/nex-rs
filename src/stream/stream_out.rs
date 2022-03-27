@@ -1,3 +1,4 @@
+use crate::nex_types::StructureInterface;
 use no_std_io::{Cursor, EndianWrite, Reader, StreamContainer, StreamWriter, Writer, WriterResult};
 
 pub struct StreamOut {
@@ -107,6 +108,10 @@ impl StreamOut {
         for item in value {
             self.write_qbuffer(item);
         }
+    }
+
+    pub fn write_struct<T: StructureInterface>(&mut self, value: &T) -> Result<(), &'static str> {
+        value.bytes(self)
     }
 }
 

@@ -2,20 +2,12 @@ use crate::stream::{StreamIn, StreamOut};
 use no_std_io::{EndianRead, Reader, StreamReader, StreamWriter};
 
 pub trait StructureInterface {
-    //fn hierarchy(&self) -> Vec<Box<dyn StructureInterface>> {
-    //    Vec::new()
-    //}
-
     fn extract_from_stream<T: Reader>(
         &mut self,
         stream: &mut StreamIn<T>,
-    ) -> core::result::Result<(), &'static str> {
-        Ok(())
-    }
+    ) -> core::result::Result<(), &'static str>;
 
-    fn bytes(&self, stream: StreamOut) -> Vec<u8> {
-        Vec::new()
-    }
+    fn bytes(&self, stream: StreamOut) -> Vec<u8>;
 }
 
 pub struct NullData;
@@ -26,7 +18,18 @@ impl NullData {
     }
 }
 
-impl StructureInterface for NullData {}
+impl StructureInterface for NullData {
+    fn extract_from_stream<T: Reader>(
+        &mut self,
+        stream: &mut StreamIn<T>,
+    ) -> core::result::Result<(), &'static str> {
+        Ok(())
+    }
+
+    fn bytes(&self, stream: StreamOut) -> Vec<u8> {
+        vec![]
+    }
+}
 
 pub struct RVConnectionData {
     station_url: String,
@@ -63,6 +66,13 @@ impl RVConnectionData {
 }
 
 impl StructureInterface for RVConnectionData {
+    fn extract_from_stream<T: Reader>(
+        &mut self,
+        stream: &mut StreamIn<T>,
+    ) -> core::result::Result<(), &'static str> {
+        unimplemented!()
+    }
+
     fn bytes(&self, mut stream: StreamOut) -> Vec<u8> {
         stream.write_string(&self.station_url);
         stream.checked_write_stream_le(&0_u32);
@@ -421,6 +431,10 @@ impl StructureInterface for ResultRange {
 
         Ok(())
     }
+
+    fn bytes(&self, stream: StreamOut) -> Vec<u8> {
+        unimplemented!()
+    }
 }
 
 struct DataHolder<T: StructureInterface> {
@@ -438,6 +452,13 @@ impl<T: StructureInterface> DataHolder<T> {
 }
 
 impl<T: StructureInterface> StructureInterface for DataHolder<T> {
+    fn extract_from_stream<U: Reader>(
+        &mut self,
+        stream: &mut StreamIn<U>,
+    ) -> std::result::Result<(), &'static str> {
+        unimplemented!()
+    }
+
     fn bytes(&self, mut stream: StreamOut) -> Vec<u8> {
         let content = self.object.bytes(StreamOut::new());
 

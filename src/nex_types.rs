@@ -1,12 +1,15 @@
-use no_std_io::{StreamReader, StreamWriter, Reader};
 use crate::stream::{StreamIn, StreamOut};
+use no_std_io::{Reader, StreamReader, StreamWriter};
 
 pub trait StructureInterface {
     //fn hierarchy(&self) -> Vec<Box<dyn StructureInterface>> {
     //    Vec::new()
     //}
 
-    fn extract_from_stream<T: Reader>(&mut self, stream: &mut StreamIn<T>) -> core::result::Result<(), &'static str> {
+    fn extract_from_stream<T: Reader>(
+        &mut self,
+        stream: &mut StreamIn<T>,
+    ) -> core::result::Result<(), &'static str> {
         Ok(())
     }
 
@@ -19,7 +22,7 @@ pub struct NullData;
 
 impl NullData {
     pub fn new() -> Self {
-        Self{}
+        Self {}
     }
 }
 
@@ -29,7 +32,7 @@ pub struct RVConnectionData {
     station_url: String,
     special_protocols: Vec<u8>,
     station_url_special_protocols: String,
-    time: u64
+    time: u64,
 }
 
 impl RVConnectionData {
@@ -38,7 +41,7 @@ impl RVConnectionData {
             station_url: String::new(),
             special_protocols: Vec::new(),
             station_url_special_protocols: String::new(),
-            time: 0
+            time: 0,
         }
     }
 
@@ -71,18 +74,25 @@ impl StructureInterface for RVConnectionData {
 }
 
 pub struct DateTime {
-    value: u64
+    value: u64,
 }
 
 impl DateTime {
     pub fn new_from_value(value: u64) -> Self {
-        Self {
-            value
-        }
+        Self { value }
     }
 
-    pub fn make(&mut self, year: u64, month: u64, day: u64, hour: u64, minute: u64, second: u64) -> u64 {
-        self.value = second | (minute << 6) | (hour << 12) | (day << 17) | (month << 22) | (year << 26);
+    pub fn make(
+        &mut self,
+        year: u64,
+        month: u64,
+        day: u64,
+        hour: u64,
+        minute: u64,
+        second: u64,
+    ) -> u64 {
+        self.value =
+            second | (minute << 6) | (hour << 12) | (day << 17) | (month << 22) | (year << 26);
         self.value
     }
 
@@ -107,7 +117,7 @@ pub struct StationURL {
     upnp: Option<String>,
     pmp: Option<String>,
     probe_init: Option<String>,
-    prid: Option<String>
+    prid: Option<String>,
 }
 
 impl StationURL {
@@ -343,7 +353,10 @@ impl StationURL {
 struct ResultCode(u32);
 
 impl ResultCode {
-    pub fn extract_from_stream<T: Reader>(&mut self, stream: &mut StreamIn<T>) -> Result<(), &'static str> {
+    pub fn extract_from_stream<T: Reader>(
+        &mut self,
+        stream: &mut StreamIn<T>,
+    ) -> Result<(), &'static str> {
         self.0 = stream
             .read_stream_le()
             .map_err(|_| "Result code could not be read")?;
@@ -365,20 +378,23 @@ impl From<u32> for ResultCode {
 
 struct ResultRange {
     offset: u32,
-    length: u32
+    length: u32,
 }
 
 impl ResultRange {
     pub fn new() -> Self {
         Self {
             offset: 0,
-            length: 0
+            length: 0,
         }
     }
 }
 
 impl StructureInterface for ResultRange {
-    fn extract_from_stream<T: Reader>(&mut self, stream: &mut StreamIn<T>) -> std::result::Result<(), &'static str> {
+    fn extract_from_stream<T: Reader>(
+        &mut self,
+        stream: &mut StreamIn<T>,
+    ) -> std::result::Result<(), &'static str> {
         self.offset = stream
             .read_stream_le()
             .map_err(|_| "Offset could not be read")?;
@@ -393,14 +409,14 @@ impl StructureInterface for ResultRange {
 
 struct DataHolder<T: StructureInterface> {
     name: String,
-    object: T
+    object: T,
 }
 
-impl <T : StructureInterface>DataHolder<T> {
+impl<T: StructureInterface> DataHolder<T> {
     pub fn new_from_object(object: T) -> Self {
         Self {
             name: String::new(),
-            object
+            object,
         }
     }
 }

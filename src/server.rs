@@ -17,10 +17,20 @@ use tokio::time;
 
 pub trait EventHandler {
     fn on_syn(&self, client: &mut ClientConnection, packet: &PacketV1) -> Result<(), &'static str>;
-    fn on_connect(&self, client: &mut ClientConnection, packet: &PacketV1) -> Result<(), &'static str>;
-    fn on_data(&self, client: &mut ClientConnection, packet: &PacketV1) -> Result<(), &'static str>;
-    fn on_disconnect(&self, client: &mut ClientConnection, packet: &PacketV1) -> Result<(), &'static str>;
-    fn on_ping(&self, client: &mut ClientConnection, packet: &PacketV1) -> Result<(), &'static str>;
+    fn on_connect(
+        &self,
+        client: &mut ClientConnection,
+        packet: &PacketV1,
+    ) -> Result<(), &'static str>;
+    fn on_data(&self, client: &mut ClientConnection, packet: &PacketV1)
+        -> Result<(), &'static str>;
+    fn on_disconnect(
+        &self,
+        client: &mut ClientConnection,
+        packet: &PacketV1,
+    ) -> Result<(), &'static str>;
+    fn on_ping(&self, client: &mut ClientConnection, packet: &PacketV1)
+        -> Result<(), &'static str>;
 }
 
 pub struct ServerSettings {

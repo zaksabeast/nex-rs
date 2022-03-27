@@ -4,8 +4,7 @@ use no_std_io::{EndianRead, Reader, StreamReader, StreamWriter};
 pub trait StructureInterface {
     fn extract_from_stream<T: Reader>(stream: &mut StreamIn<T>) -> Result<Self, &'static str>
     where
-        Self: StructureInterface,
-        Self: Sized;
+        Self: StructureInterface + Sized;
 
     fn bytes(&self, stream: &mut StreamOut) -> Result<(), &'static str>;
 }

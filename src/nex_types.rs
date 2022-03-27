@@ -1,5 +1,5 @@
 use crate::stream::{StreamIn, StreamOut};
-use no_std_io::{Reader, StreamReader, StreamWriter};
+use no_std_io::{EndianRead, Reader, StreamReader, StreamWriter};
 
 pub trait StructureInterface {
     //fn hierarchy(&self) -> Vec<Box<dyn StructureInterface>> {
@@ -78,7 +78,7 @@ pub struct DateTime {
 }
 
 impl DateTime {
-    pub fn new_from_value(value: u64) -> Self {
+    pub fn new(value: u64) -> Self {
         Self { value }
     }
 
@@ -98,6 +98,22 @@ impl DateTime {
 
     pub fn get_value(&self) -> u64 {
         self.value
+    }
+}
+
+impl From<u64> for DateTime {
+    fn from(raw: u64) -> Self {
+        Self::new(raw)
+    }
+}
+
+impl EndianRead for DateTime {
+    fn read_le(bytes: &[u8]) -> Self {
+        u64::read_le(bytes).into()
+    }
+
+    fn read_be(bytes: &[u8]) -> Self {
+        u64::read_be(bytes).into()
     }
 }
 

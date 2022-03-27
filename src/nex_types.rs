@@ -5,7 +5,7 @@ pub trait StructureInterface {
     fn extract_from_stream<T: Reader>(
         &mut self,
         stream: &mut StreamIn<T>,
-    ) -> core::result::Result<(), &'static str>;
+    ) -> Result<(), &'static str>;
 
     fn bytes(&self, stream: StreamOut) -> Vec<u8>;
 }
@@ -22,7 +22,7 @@ impl StructureInterface for NullData {
     fn extract_from_stream<T: Reader>(
         &mut self,
         stream: &mut StreamIn<T>,
-    ) -> core::result::Result<(), &'static str> {
+    ) -> Result<(), &'static str> {
         Ok(())
     }
 
@@ -69,7 +69,7 @@ impl StructureInterface for RVConnectionData {
     fn extract_from_stream<T: Reader>(
         &mut self,
         stream: &mut StreamIn<T>,
-    ) -> core::result::Result<(), &'static str> {
+    ) -> Result<(), &'static str> {
         unimplemented!()
     }
 
@@ -420,7 +420,7 @@ impl StructureInterface for ResultRange {
     fn extract_from_stream<T: Reader>(
         &mut self,
         stream: &mut StreamIn<T>,
-    ) -> std::result::Result<(), &'static str> {
+    ) -> Result<(), &'static str> {
         self.offset = stream
             .read_stream_le()
             .map_err(|_| "Offset could not be read")?;
@@ -455,7 +455,7 @@ impl<T: StructureInterface> StructureInterface for DataHolder<T> {
     fn extract_from_stream<U: Reader>(
         &mut self,
         stream: &mut StreamIn<U>,
-    ) -> std::result::Result<(), &'static str> {
+    ) -> Result<(), &'static str> {
         unimplemented!()
     }
 

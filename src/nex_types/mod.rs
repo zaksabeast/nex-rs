@@ -4,6 +4,9 @@ pub use data_holder::*;
 mod date_time;
 pub use date_time::*;
 
+mod nex_buffer;
+pub use nex_buffer::*;
+
 mod nex_string;
 pub use nex_string::*;
 

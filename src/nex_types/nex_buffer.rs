@@ -2,6 +2,7 @@ use no_std_io::{
     Cursor, EndianRead, EndianWrite, Error, ReadOutput, StreamContainer, StreamReader, StreamWriter,
 };
 
+#[derive(Debug, Default)]
 pub struct NexBuffer(Vec<u8>);
 
 impl EndianRead for NexBuffer {

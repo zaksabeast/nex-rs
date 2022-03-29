@@ -13,6 +13,12 @@ pub enum NexVariant {
     Null,
 }
 
+impl Default for NexVariant {
+    fn default() -> Self {
+        NexVariant::Null
+    }
+}
+
 impl NexVariant {
     pub fn get_type_value(&self) -> u8 {
         match &self {

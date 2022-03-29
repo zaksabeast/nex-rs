@@ -2,15 +2,16 @@ use no_std_io::{
     Cursor, EndianRead, EndianWrite, Error, ReadOutput, StreamContainer, StreamReader, StreamWriter,
 };
 
+#[derive(Debug, Default)]
 pub struct NexMap<T: EndianWrite + EndianRead, U: EndianWrite + EndianRead>(Vec<(T, U)>);
 
-impl <T: EndianWrite + EndianRead, U: EndianWrite + EndianRead>From<Vec<(T, U)>> for NexMap<T, U> {
+impl<T: EndianWrite + EndianRead, U: EndianWrite + EndianRead> From<Vec<(T, U)>> for NexMap<T, U> {
     fn from(map: Vec<(T, U)>) -> Self {
         Self(map)
     }
 }
 
-impl <T: EndianWrite + EndianRead, U: EndianWrite + EndianRead>EndianRead for NexMap<T, U> {
+impl<T: EndianWrite + EndianRead, U: EndianWrite + EndianRead> EndianRead for NexMap<T, U> {
     fn try_read_le(bytes: &[u8]) -> Result<ReadOutput<Self>, Error> {
         let mut stream = StreamContainer::new(bytes);
         let mut length: usize =
@@ -38,7 +39,7 @@ impl <T: EndianWrite + EndianRead, U: EndianWrite + EndianRead>EndianRead for Ne
     }
 }
 
-impl <T: EndianWrite + EndianRead, U: EndianWrite + EndianRead>EndianWrite for NexMap<T, U> {
+impl<T: EndianWrite + EndianRead, U: EndianWrite + EndianRead> EndianWrite for NexMap<T, U> {
     fn get_size(&self) -> usize {
         let mut size = 4;
         for entry in &self.0 {

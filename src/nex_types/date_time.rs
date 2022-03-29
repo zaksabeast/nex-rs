@@ -2,6 +2,7 @@ use no_std_io::{
     Cursor, EndianRead, EndianWrite, Error, ReadOutput, StreamContainer, StreamWriter,
 };
 
+#[derive(Debug, Default)]
 pub struct DateTime {
     value: u64,
 }

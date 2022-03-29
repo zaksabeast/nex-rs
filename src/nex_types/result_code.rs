@@ -1,5 +1,6 @@
 use no_std_io::{EndianRead, Error, ReadOutput};
 
+#[derive(Default)]
 pub struct ResultCode(u32);
 
 impl EndianRead for ResultCode {

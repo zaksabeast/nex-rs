@@ -1,4 +1,4 @@
-use no_std_io::{Cursor, EndianRead};
+use no_std_io::EndianRead;
 
 #[derive(Debug, EndianRead, Default)]
 pub struct ResultRange {

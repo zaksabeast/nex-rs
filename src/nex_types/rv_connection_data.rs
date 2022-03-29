@@ -1,5 +1,5 @@
 use super::NexString;
-use no_std_io::{Cursor, EndianRead, EndianWrite, Error};
+use no_std_io::{EndianRead, EndianWrite, Error};
 
 #[derive(Default, EndianRead, EndianWrite)]
 pub struct RVConnectionData {

@@ -1,5 +1,5 @@
 use super::NexString;
-use no_std_io::{EndianRead, EndianWrite, Error};
+use no_std_io::{EndianRead, EndianWrite};
 
 #[derive(Debug, EndianRead, EndianWrite)]
 struct DataHolder<T: EndianRead + EndianWrite> {

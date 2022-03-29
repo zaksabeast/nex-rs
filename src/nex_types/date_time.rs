@@ -49,7 +49,7 @@ impl EndianRead for DateTime {
 
 impl EndianWrite for DateTime {
     fn get_size(&self) -> usize {
-        64
+        self.value.get_size()
     }
 
     fn try_write_le(&self, dst: &mut [u8]) -> Result<usize, Error> {

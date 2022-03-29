@@ -52,7 +52,7 @@ impl EndianWrite for NexVariant {
     fn get_size(&self) -> usize {
         match &self {
             NexVariant::Int64(i) => i.get_size(),
-            NexVariant::Float64(_) => 64,
+            NexVariant::Float64(_) => 16,
             NexVariant::Bool(b) => b.get_size(),
             NexVariant::String(s) => s.get_size(),
             NexVariant::DateTime(dt) => dt.get_size(),

@@ -19,13 +19,12 @@ impl From<String> for NexString {
 
 impl EndianWrite for NexString {
     fn get_size(&self) -> usize {
-        self.0.len() + 1
+        self.0.len() + 3
     }
 
     fn try_write_le(&self, dst: &mut [u8]) -> Result<usize, Error> {
         let raw = &self.0;
-        let len: u16 = self
-            .get_size()
+        let len: u16 = (self.0.len() + 1)
             .try_into()
             .map_err(|_| Error::InvalidWrite {
                 message: "String length does not fit into u16",

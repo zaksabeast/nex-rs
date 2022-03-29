@@ -26,7 +26,7 @@ impl EndianRead for NexBuffer {
 
 impl EndianWrite for NexBuffer {
     fn get_size(&self) -> usize {
-        self.0.len() + 1
+        self.0.len() + 4
     }
 
     fn try_write_le(&self, dst: &mut [u8]) -> Result<usize, Error> {

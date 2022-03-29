@@ -44,3 +44,15 @@ impl EndianWrite for NexBuffer {
         unimplemented!()
     }
 }
+
+impl From<NexBuffer> for Vec<u8> {
+    fn from(nex: NexBuffer) -> Self {
+        nex.0
+    }
+}
+
+impl From<Vec<u8>> for NexBuffer {
+    fn from(raw: Vec<u8>) -> Self {
+        NexBuffer(raw)
+    }
+}

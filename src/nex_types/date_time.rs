@@ -1,4 +1,6 @@
-use no_std_io::{Cursor, EndianRead, EndianWrite, Error, ReadOutput, StreamContainer, StreamWriter};
+use no_std_io::{
+    Cursor, EndianRead, EndianWrite, Error, ReadOutput, StreamContainer, StreamWriter,
+};
 
 pub struct DateTime {
     value: u64,

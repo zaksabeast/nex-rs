@@ -27,3 +27,6 @@ pub use station_url::*;
 
 mod nex_variant;
 pub use nex_variant::*;
+
+mod nex_map;
+pub use nex_map::*;

@@ -1,13 +1,6 @@
-use crate::stream::{StreamIn, StreamOut};
-use no_std_io::{EndianRead, Reader, StreamReader, StreamWriter};
-
-pub trait StructureInterface {
-    fn extract_from_stream<T: Reader>(stream: &mut StreamIn<T>) -> Result<Self, &'static str>
-    where
-        Self: StructureInterface + Sized;
-
-    fn bytes(&self, stream: &mut StreamOut) -> Result<(), &'static str>;
-}
+use no_std_io::{
+    Cursor, EndianRead, EndianWrite, Error, ReadOutput, StreamContainer, StreamReader, StreamWriter,
+};
 
 #[derive(Default)]
 pub struct NullData;
@@ -18,58 +11,23 @@ impl NullData {
     }
 }
 
-impl StructureInterface for NullData {
-    fn extract_from_stream<T: Reader>(stream: &mut StreamIn<T>) -> Result<Self, &'static str> {
-        Ok(Self {})
+impl EndianRead for NullData {
+    fn try_read_le(bytes: &[u8]) -> Result<ReadOutput<Self>, Error> {
+        Ok(ReadOutput::new(Self, 0))
     }
 
-    fn bytes(&self, stream: &mut StreamOut) -> Result<(), &'static str> {
-        Ok(())
-    }
-}
-
-#[derive(Default)]
-pub struct RVConnectionData {
-    station_url: String,
-    special_protocols: Vec<u8>,
-    station_url_special_protocols: String,
-    time: u64,
-}
-
-impl RVConnectionData {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    pub fn set_station_url(&mut self, station_url: String) {
-        self.station_url = station_url;
-    }
-
-    pub fn set_special_protocols(&mut self, special_protocols: Vec<u8>) {
-        self.special_protocols = special_protocols;
-    }
-
-    pub fn set_station_url_special_protocols(&mut self, station_url_special_protocols: String) {
-        self.station_url_special_protocols = station_url_special_protocols;
-    }
-
-    pub fn set_time(&mut self, time: u64) {
-        self.time = time;
-    }
-}
-
-impl StructureInterface for RVConnectionData {
-    fn extract_from_stream<T: Reader>(stream: &mut StreamIn<T>) -> Result<Self, &'static str> {
+    fn try_read_be(bytes: &[u8]) -> Result<ReadOutput<Self>, Error> {
         unimplemented!()
     }
+}
 
-    fn bytes(&self, stream: &mut StreamOut) -> Result<(), &'static str> {
-        stream.write_string(&self.station_url);
-        stream.checked_write_stream_le(&0_u32);
-        stream.write_string(&self.station_url_special_protocols);
-        stream.checked_write_stream_le(&self.time);
-        Ok(())
-    }
+#[derive(Default, EndianRead, EndianWrite)]
+pub struct RVConnectionData {
+    station_url: NexString,
+    // Should be Vec<u8>, but always empty
+    special_protocols: u32,
+    station_url_special_protocols: NexString,
+    time: u64,
 }
 
 pub struct DateTime {
@@ -107,12 +65,13 @@ impl From<u64> for DateTime {
 }
 
 impl EndianRead for DateTime {
-    fn read_le(bytes: &[u8]) -> Self {
-        u64::read_le(bytes).into()
+    fn try_read_le(bytes: &[u8]) -> Result<ReadOutput<Self>, Error> {
+        let result = u64::try_read_le(bytes)?.into_other();
+        Ok(result)
     }
 
-    fn read_be(bytes: &[u8]) -> Self {
-        u64::read_be(bytes).into()
+    fn try_read_be(bytes: &[u8]) -> Result<ReadOutput<Self>, Error> {
+        unimplemented!()
     }
 }
 
@@ -367,21 +326,14 @@ impl StationURL {
 
 struct ResultCode(u32);
 
-impl ResultCode {
-    pub fn extract_from_stream<T: Reader>(
-        &mut self,
-        stream: &mut StreamIn<T>,
-    ) -> Result<(), &'static str> {
-        self.0 = stream
-            .read_stream_le()
-            .map_err(|_| "Result code could not be read")?;
-
-        Ok(())
+impl EndianRead for ResultCode {
+    fn try_read_le(bytes: &[u8]) -> Result<ReadOutput<Self>, Error> {
+        let result = u32::try_read_le(bytes)?.into_other();
+        Ok(result)
     }
 
-    pub fn bytes(&self, stream: &mut StreamOut) -> Result<(), &'static str> {
-        stream.checked_write_stream_le(&self.0);
-        Ok(())
+    fn try_read_be(bytes: &[u8]) -> Result<ReadOutput<Self>, Error> {
+        unimplemented!()
     }
 }
 
@@ -391,6 +343,7 @@ impl From<u32> for ResultCode {
     }
 }
 
+#[derive(Debug, EndianRead)]
 struct ResultRange {
     offset: u32,
     length: u32,
@@ -405,51 +358,75 @@ impl ResultRange {
     }
 }
 
-impl StructureInterface for ResultRange {
-    fn extract_from_stream<T: Reader>(stream: &mut StreamIn<T>) -> Result<Self, &'static str> {
-        let offset = stream
-            .read_stream_le()
-            .map_err(|_| "Offset could not be read")?;
-
-        let length = stream
-            .read_stream_le()
-            .map_err(|_| "Length could not be read")?;
-
-        Ok(Self { offset, length })
-    }
-
-    fn bytes(&self, stream: &mut StreamOut) -> Result<(), &'static str> {
-        Ok(())
-    }
-}
-
-struct DataHolder<T: StructureInterface> {
-    name: String,
+#[derive(Debug, EndianRead, EndianWrite)]
+struct DataHolder<T: EndianRead + EndianWrite> {
+    name: NexString,
     object: T,
 }
 
-impl<T: StructureInterface> DataHolder<T> {
+impl<T: EndianRead + EndianWrite> DataHolder<T> {
     pub fn new_from_object(object: T) -> Self {
         Self {
-            name: String::new(),
+            name: NexString::default(),
             object,
         }
     }
 }
 
-impl<T: StructureInterface> StructureInterface for DataHolder<T> {
-    fn extract_from_stream<U: Reader>(stream: &mut StreamIn<U>) -> Result<Self, &'static str> {
-        unimplemented!()
+#[derive(Debug, Default)]
+struct NexString(String);
+
+impl From<NexString> for String {
+    fn from(nex: NexString) -> Self {
+        nex.0
+    }
+}
+
+impl From<String> for NexString {
+    fn from(raw: String) -> Self {
+        NexString(raw)
+    }
+}
+
+impl EndianWrite for NexString {
+    fn get_size(&self) -> usize {
+        self.0.len() + 1
     }
 
-    fn bytes(&self, stream: &mut StreamOut) -> Result<(), &'static str> {
-        let mut content = StreamOut::new();
-        self.object.bytes(&mut content)?;
+    fn try_write_le(&self, dst: &mut [u8]) -> Result<usize, Error> {
+        let raw = &self.0;
+        let len: u16 = self
+            .get_size()
+            .try_into()
+            .map_err(|_| Error::InvalidWrite {
+                message: "String length does not fit into u16",
+            })?;
 
-        stream.write_string(&self.name);
-        stream.checked_write_stream_le(&(content.get_slice().len() as u32 + 4_u32));
-        stream.write_buffer(content.get_slice());
+        let mut stream = StreamContainer::new(dst);
+        stream.write_stream_le(&len)?;
+        stream.write_stream_bytes(raw.as_bytes())?;
+        stream.write_stream(&0u8)?;
+        Ok(stream.get_index())
+    }
 
-        Ok(())
+    fn try_write_be(&self, dst: &mut [u8]) -> Result<usize, Error> {
+        unimplemented!()
+    }
+}
+
+impl EndianRead for NexString {
+    fn try_read_le(bytes: &[u8]) -> Result<ReadOutput<Self>, Error> {
+        let mut stream = StreamContainer::new(bytes);
+        let length: u16 = stream.read_stream_le()?;
+        let read_bytes = stream.read_byte_stream(length.into())?;
+        let raw = String::from_utf8(read_bytes).map_err(|_| Error::InvalidRead {
+            message: "Bytes weren't valid utf8",
+        })?;
+
+        Ok(ReadOutput::new(NexString(raw), stream.get_index()))
+    }
+
+    fn try_read_be(bytes: &[u8]) -> Result<ReadOutput<Self>, Error> {
+        unimplemented!()
     }
 }

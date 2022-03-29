@@ -12,4 +12,3 @@ pub mod packet;
 mod rc4;
 pub mod rmc_request;
 pub mod server;
-pub mod stream;

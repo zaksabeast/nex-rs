@@ -1,5 +1,4 @@
-use crate::stream::StreamIn;
-use no_std_io::StreamReader;
+use no_std_io::{StreamContainer, StreamReader};
 
 #[derive(Default, Debug)]
 pub struct RMCRequest {
@@ -18,7 +17,7 @@ impl TryFrom<&[u8]> for RMCRequest {
             return Err("Invalid RMCRequest size");
         }
 
-        let mut stream = StreamIn::new(bytes);
+        let mut stream = StreamContainer::new(bytes);
 
         let size: usize = stream
             .read_stream_le::<u32>()

@@ -1,11 +1,8 @@
 use super::{BasePacket, Packet, PacketFlag, PacketFlags, PacketOption, PacketType};
-use crate::{
-    client::ClientContext,
-    stream::{StreamIn, StreamOut},
-};
+use crate::client::ClientContext;
 use hmac::{Hmac, Mac};
 use md5::Md5;
-use no_std_io::{Cursor, StreamContainer, StreamReader, StreamWriter};
+use no_std_io::{Cursor, Reader, StreamContainer, StreamReader, StreamWriter};
 
 #[derive(Debug)]
 pub struct PacketV1 {
@@ -50,10 +47,10 @@ impl Packet for PacketV1 {
             u16::from(self.base.packet_type) | u16::from(self.base.flags) << 4
         };
 
-        let mut stream = StreamOut::new();
+        let mut stream = StreamContainer::new(vec![]);
 
         stream.checked_write_stream_le(&0xd0eau16); // v1 magic
-        stream.checked_write_stream(&1u8);
+        stream.checked_write_stream_le(&1u8);
 
         let options = self.encode_options();
         let options_len: u8 = options
@@ -67,13 +64,13 @@ impl Packet for PacketV1 {
             .try_into()
             .expect("Payload length is too large");
 
-        stream.checked_write_stream(&options_len);
+        stream.checked_write_stream_le(&options_len);
         stream.checked_write_stream_le(&payload_len);
-        stream.checked_write_stream(&self.base.source);
-        stream.checked_write_stream(&self.base.destination);
+        stream.checked_write_stream_le(&self.base.source);
+        stream.checked_write_stream_le(&self.base.destination);
         stream.checked_write_stream_le(&type_flags);
-        stream.checked_write_stream(&self.base.session_id);
-        stream.checked_write_stream(&self.substream_id);
+        stream.checked_write_stream_le(&self.base.session_id);
+        stream.checked_write_stream_le(&self.substream_id);
         stream.checked_write_stream_le(&self.base.sequence_id);
 
         let header = &stream.get_slice()[2..14];
@@ -96,7 +93,7 @@ impl Packet for PacketV1 {
             stream.checked_write_stream_bytes(&self.base.payload);
         }
 
-        stream.into()
+        stream.into_raw()
     }
 }
 
@@ -159,23 +156,23 @@ impl PacketV1 {
 
         let mut stream = StreamContainer::new(data.as_slice());
 
-        self.magic = stream.default_read_stream();
+        self.magic = stream.default_read_stream_le();
 
         if self.magic != 0xd0ea {
             return Err("Invalid magic");
         }
 
-        self.base.version = stream.default_read_stream();
+        self.base.version = stream.default_read_stream_le();
 
         if self.base.version != 1 {
             return Err("Invalid version");
         }
 
-        let options_length = usize::from(stream.default_read_stream::<u8>());
+        let options_length = usize::from(stream.default_read_stream_le::<u8>());
         let payload_size = usize::from(stream.default_read_stream_le::<u16>());
 
-        self.base.source = stream.default_read_stream();
-        self.base.destination = stream.default_read_stream();
+        self.base.source = stream.default_read_stream_le();
+        self.base.destination = stream.default_read_stream_le();
 
         let type_flags: u16 = stream.default_read_stream_le();
         let packet_type;
@@ -192,8 +189,8 @@ impl PacketV1 {
         self.base.packet_type = packet_type.try_into().map_err(|_| "Invalid packet type")?;
         self.base.flags = PacketFlags::new(flags);
 
-        self.base.session_id = stream.default_read_stream();
-        self.substream_id = stream.default_read_stream();
+        self.base.session_id = stream.default_read_stream_le();
+        self.substream_id = stream.default_read_stream_le();
         self.base.sequence_id = stream.default_read_stream_le();
         self.base.signature = stream.default_read_byte_stream(16);
 
@@ -230,16 +227,16 @@ impl PacketV1 {
     }
 
     pub fn decode_options(&mut self, options: &[u8]) -> Result<(), &'static str> {
-        let mut options_stream = StreamIn::new(options);
+        let mut options_stream = StreamContainer::new(options);
         let options_len = options.len();
 
         let mut i = 0;
         while i < options_len {
             let option_type: PacketOption = options_stream
-                .default_read_stream::<u8>()
+                .default_read_stream_le::<u8>()
                 .try_into()
                 .map_err(|_| "Invalid packet option")?;
-            let option_size = usize::from(options_stream.default_read_stream::<u8>());
+            let option_size = usize::from(options_stream.default_read_stream_le::<u8>());
 
             match option_type {
                 PacketOption::SupportedFunctions => {
@@ -254,13 +251,13 @@ impl PacketV1 {
                         options_stream.default_read_byte_stream(option_size);
                 }
                 PacketOption::FragmentId => {
-                    self.base.fragment_id = options_stream.default_read_stream();
+                    self.base.fragment_id = options_stream.default_read_stream_le();
                 }
                 PacketOption::InitialSequenceId => {
                     self.initial_sequence_id = options_stream.default_read_stream_le();
                 }
                 PacketOption::MaxSubstreamId => {
-                    self.maximum_substream_id = options_stream.default_read_stream();
+                    self.maximum_substream_id = options_stream.default_read_stream_le();
                 }
             }
 
@@ -271,34 +268,34 @@ impl PacketV1 {
     }
 
     pub fn encode_options(&self) -> Vec<u8> {
-        let mut stream = StreamOut::new();
+        let mut stream = StreamContainer::new(vec![]);
 
         if self.base.packet_type == PacketType::Syn || self.base.packet_type == PacketType::Connect
         {
-            stream.checked_write_stream::<u8>(&u8::from(PacketOption::SupportedFunctions));
-            stream.checked_write_stream(&4u8);
+            stream.checked_write_stream_le::<u8>(&u8::from(PacketOption::SupportedFunctions));
+            stream.checked_write_stream_le(&4u8);
             stream.checked_write_stream_le(&self.supported_functions);
 
-            stream.checked_write_stream::<u8>(&u8::from(PacketOption::ConnectionSignature));
-            stream.checked_write_stream(&16u8);
+            stream.checked_write_stream_le::<u8>(&u8::from(PacketOption::ConnectionSignature));
+            stream.checked_write_stream_le(&16u8);
             stream.checked_write_stream_bytes(&self.base.connection_signature);
 
             if self.base.packet_type == PacketType::Connect {
-                stream.checked_write_stream::<u8>(&u8::from(PacketOption::InitialSequenceId));
-                stream.checked_write_stream(&2u8);
+                stream.checked_write_stream_le::<u8>(&u8::from(PacketOption::InitialSequenceId));
+                stream.checked_write_stream_le(&2u8);
                 stream.checked_write_stream_le(&self.initial_sequence_id);
             }
 
-            stream.checked_write_stream::<u8>(&u8::from(PacketOption::MaxSubstreamId));
-            stream.checked_write_stream(&1u8);
-            stream.checked_write_stream(&self.maximum_substream_id);
+            stream.checked_write_stream_le::<u8>(&u8::from(PacketOption::MaxSubstreamId));
+            stream.checked_write_stream_le(&1u8);
+            stream.checked_write_stream_le(&self.maximum_substream_id);
         } else if self.base.packet_type == PacketType::Data {
-            stream.checked_write_stream::<u8>(&u8::from(PacketOption::FragmentId));
-            stream.checked_write_stream(&1u8);
-            stream.checked_write_stream(&self.base.fragment_id);
+            stream.checked_write_stream_le::<u8>(&u8::from(PacketOption::FragmentId));
+            stream.checked_write_stream_le(&1u8);
+            stream.checked_write_stream_le(&self.base.fragment_id);
         }
 
-        stream.into()
+        stream.into_raw()
     }
 
     pub fn calculate_signature(

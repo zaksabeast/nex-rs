@@ -2,10 +2,9 @@ use crate::{
     client::ClientConnection,
     compression::{dummy_compression, zlib_compression},
     packet::{Packet, PacketFlag, PacketType, PacketV1},
-    stream::StreamOut,
 };
 use async_trait::async_trait;
-use no_std_io::StreamWriter;
+use no_std_io::{StreamContainer, StreamWriter};
 use rand::RngCore;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -343,7 +342,7 @@ pub trait Server: EventHandler {
                 ack_packet.get_mut_flags().clear_flag(PacketFlag::Ack);
                 ack_packet.get_mut_flags().set_flag(PacketFlag::MultiAck);
 
-                let mut payload_stream = StreamOut::new();
+                let mut payload_stream = StreamContainer::new(vec![]);
 
                 // New version
                 if nex_version >= 2 {
@@ -351,12 +350,12 @@ pub trait Server: EventHandler {
                     ack_packet.set_substream_id(1);
 
                     // We're going to mimic nex-go and do one ack packet
-                    payload_stream.checked_write_stream(&0u8); // substream id
-                    payload_stream.checked_write_stream(&0u8); // length of additional sequence ids
+                    payload_stream.checked_write_stream_le(&0u8); // substream id
+                    payload_stream.checked_write_stream_le(&0u8); // length of additional sequence ids
                     payload_stream.checked_write_stream_le(&packet.get_sequence_id());
                 }
 
-                ack_packet.set_payload(payload_stream.into())
+                ack_packet.set_payload(payload_stream.into_raw())
             }
             _ => {}
         };

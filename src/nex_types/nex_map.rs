@@ -1,17 +1,16 @@
-use crate::nex_types::NexVariant;
 use no_std_io::{
     Cursor, EndianRead, EndianWrite, Error, ReadOutput, StreamContainer, StreamReader, StreamWriter,
 };
 
-pub struct NexMap(Vec<(NexVariant, NexVariant)>);
+pub struct NexMap<T: EndianWrite + EndianRead, U: EndianWrite + EndianRead>(Vec<(T, U)>);
 
-impl From<Vec<(NexVariant, NexVariant)>> for NexMap {
-    fn from(map: Vec<(NexVariant, NexVariant)>) -> Self {
+impl <T: EndianWrite + EndianRead, U: EndianWrite + EndianRead>From<Vec<(T, U)>> for NexMap<T, U> {
+    fn from(map: Vec<(T, U)>) -> Self {
         Self(map)
     }
 }
 
-impl EndianRead for NexMap {
+impl <T: EndianWrite + EndianRead, U: EndianWrite + EndianRead>EndianRead for NexMap<T, U> {
     fn try_read_le(bytes: &[u8]) -> Result<ReadOutput<Self>, Error> {
         let mut stream = StreamContainer::new(bytes);
         let mut length: usize =
@@ -25,8 +24,8 @@ impl EndianRead for NexMap {
         let mut data = Vec::with_capacity(length);
 
         while length > 0 {
-            let key = stream.read_stream_le::<NexVariant>()?;
-            let value = stream.read_stream_le::<NexVariant>()?;
+            let key = stream.read_stream_le::<T>()?;
+            let value = stream.read_stream_le::<U>()?;
             data.push((key, value));
             length -= 1;
         }
@@ -39,7 +38,7 @@ impl EndianRead for NexMap {
     }
 }
 
-impl EndianWrite for NexMap {
+impl <T: EndianWrite + EndianRead, U: EndianWrite + EndianRead>EndianWrite for NexMap<T, U> {
     fn get_size(&self) -> usize {
         let mut size = 4;
         for entry in &self.0 {

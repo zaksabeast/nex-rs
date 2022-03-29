@@ -1,4 +1,4 @@
-use no_std_io::{EndianRead, Error, ReadOutput};
+use no_std_io::{Cursor, EndianRead, EndianWrite, Error, ReadOutput, StreamContainer, StreamWriter};
 
 pub struct DateTime {
     value: u64,
@@ -41,6 +41,22 @@ impl EndianRead for DateTime {
     }
 
     fn try_read_be(bytes: &[u8]) -> Result<ReadOutput<Self>, Error> {
+        unimplemented!()
+    }
+}
+
+impl EndianWrite for DateTime {
+    fn get_size(&self) -> usize {
+        64
+    }
+
+    fn try_write_le(&self, dst: &mut [u8]) -> Result<usize, Error> {
+        let mut stream = StreamContainer::new(dst);
+        stream.write_stream_le(&self.value)?;
+        Ok(stream.get_index())
+    }
+
+    fn try_write_be(&self, dst: &mut [u8]) -> Result<usize, Error> {
         unimplemented!()
     }
 }

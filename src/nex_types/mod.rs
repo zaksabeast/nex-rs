@@ -24,3 +24,6 @@ pub use rv_connection_data::*;
 
 mod station_url;
 pub use station_url::*;
+
+mod nex_variant;
+pub use nex_variant::*;

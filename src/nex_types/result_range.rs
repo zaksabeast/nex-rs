@@ -1,6 +1,6 @@
-use no_std_io::EndianRead;
+use no_std_io::{EndianRead, EndianWrite};
 
-#[derive(Debug, EndianRead, Default)]
+#[derive(Debug, EndianRead, EndianWrite, Default)]
 pub struct ResultRange {
     offset: u32,
     length: u32,

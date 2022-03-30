@@ -4,7 +4,6 @@ use crate::{
     rc4::Rc4,
     server::ServerSettings,
 };
-use md5::{Digest, Md5};
 use std::net::SocketAddr;
 
 #[derive(Clone)]
@@ -146,12 +145,7 @@ impl ClientConnection {
 
     pub fn update_access_key(&mut self, access_key: String) {
         self.context.signature_base = access_key.as_bytes().iter().map(|byte| *byte as u32).sum();
-
-        let mut md5 = Md5::new();
-
-        md5.update(access_key.as_bytes());
-
-        self.context.signature_key = md5.finalize().to_vec();
+        self.context.signature_key = crate::md5::hash(access_key.as_bytes()).to_vec();
     }
 
     pub fn get_kick_timer(&self) -> Option<u32> {

@@ -51,6 +51,20 @@ impl KerberosEncryption {
     }
 }
 
+fn derive_kerberos_key(principal_id: u32, password: &[u8]) -> [u8; 16] {
+    let hash_count = 65000 + (principal_id % 1024);
+
+    // This is a bit awkward, but it allows
+    // key to be an array with a known size
+    // without dropping temporary values
+    let mut key = crate::md5::hash(password);
+    for _ in 0..(hash_count - 1) {
+        key = crate::md5::hash(&key);
+    }
+
+    key
+}
+
 struct Ticket {
     session_key: Vec<u8>,
     server_pid: u32,

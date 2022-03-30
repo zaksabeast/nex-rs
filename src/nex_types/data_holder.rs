@@ -4,7 +4,7 @@ use no_std_io::{
 };
 
 #[derive(Debug, Default)]
-struct DataHolder<T: EndianRead + EndianWrite> {
+pub struct DataHolder<T: EndianRead + EndianWrite> {
     name: NexString,
     object: T,
 }

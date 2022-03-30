@@ -11,5 +11,5 @@ mod md5;
 pub mod nex_types;
 pub mod packet;
 mod rc4;
-pub mod server;
 pub mod rmc;
+pub mod server;

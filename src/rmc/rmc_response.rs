@@ -24,7 +24,7 @@ impl RMCResponse {
 
     pub fn set_error(&mut self, mut error_code: u32) {
         if error_code & ERROR_MASK == 0 {
-            error_code = error_code | ERROR_MASK;
+            error_code |= ERROR_MASK;
         }
 
         self.success = 0;
@@ -34,7 +34,62 @@ impl RMCResponse {
 
 impl EndianRead for RMCResponse {
     fn try_read_le(bytes: &[u8]) -> Result<ReadOutput<Self>, Error> {
-        unimplemented!()
+        let bytes_len = bytes.len();
+        if bytes_len < 13 {
+            return Err(Error::InvalidRead {
+                message: "Invalid RMCResponse size",
+            });
+        }
+
+        let mut stream = StreamContainer::new(bytes);
+
+        let size: usize =
+            stream
+                .read_stream_le::<u32>()?
+                .try_into()
+                .map_err(|_| Error::InvalidRead {
+                    message: "RMCResponse size does not fit into usize",
+                })?;
+
+        if size != bytes_len - 4 {
+            return Err(Error::InvalidRead {
+                message: "RMCResponse data size does not match",
+            });
+        }
+
+        let protocol_id = stream.read_stream_le::<u8>()?;
+        let custom_id = if protocol_id == 0x7f {
+            stream.read_stream_le()?
+        } else {
+            0
+        };
+
+        let success = stream.read_stream_le::<u8>()?;
+
+        let base = if protocol_id == 0x7f { 16 } else { 14 };
+
+        let rmc_response = if success == 1 {
+            Self {
+                protocol_id,
+                custom_id,
+                success,
+                call_id: stream.read_stream_le()?,
+                method_id: stream.read_stream_le()?,
+                data: stream.default_read_byte_stream(bytes_len - base),
+                error_code: 0,
+            }
+        } else {
+            Self {
+                protocol_id,
+                custom_id,
+                success,
+                error_code: stream.read_stream_le()?,
+                call_id: stream.read_stream_le()?,
+                method_id: 0,
+                data: vec![],
+            }
+        };
+        Ok(ReadOutput::new(rmc_response, stream.get_index()))
     }
 
     fn try_read_be(bytes: &[u8]) -> Result<ReadOutput<Self>, Error> {
@@ -45,11 +100,7 @@ impl EndianRead for RMCResponse {
 impl EndianWrite for RMCResponse {
     fn get_size(&self) -> usize {
         // 16 is when including custom id
-        let mut base = if self.protocol_id == 0x7f {
-            14
-        } else {
-            16
-        };
+        let mut base = if self.protocol_id == 0x7f { 16 } else { 14 };
 
         if self.success == 1 {
             base += 8 + self.data.len();

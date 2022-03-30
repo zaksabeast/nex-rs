@@ -43,11 +43,7 @@ impl EndianRead for RMCRequest {
             0
         };
 
-        let base = if protocol_id == 0x7f {
-            15
-        } else {
-            13
-        };
+        let base = if protocol_id == 0x7f { 15 } else { 13 };
 
         let rmc_request = Self {
             protocol_id,
@@ -68,11 +64,7 @@ impl EndianRead for RMCRequest {
 impl EndianWrite for RMCRequest {
     fn get_size(&self) -> usize {
         // 17 is when including custom id
-        let base = if self.protocol_id == 0x7f {
-            17
-        } else {
-            13
-        };
+        let base = if self.protocol_id == 0x7f { 17 } else { 13 };
 
         self.parameters.len() + base
     }

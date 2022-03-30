@@ -1,4 +1,6 @@
-use no_std_io::{Cursor, EndianRead, EndianWrite, Error, ReadOutput, StreamContainer, StreamReader, StreamWriter};
+use no_std_io::{
+    Cursor, EndianRead, EndianWrite, Error, ReadOutput, StreamContainer, StreamReader, StreamWriter,
+};
 
 #[derive(Debug, Default)]
 pub struct NexList<T: EndianWrite + EndianRead>(Vec<T>);

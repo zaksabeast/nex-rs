@@ -1,5 +1,5 @@
 use super::{PacketFlags, PacketType};
-use crate::rmc_request::RMCRequest;
+use crate::rmc::RMCRequest;
 
 #[derive(Debug)]
 pub struct BasePacket {

@@ -16,6 +16,10 @@ impl<T: EndianRead + EndianWrite> DataHolder<T> {
             object,
         }
     }
+
+    pub fn get_name(&self) -> NexString {
+        self.name.clone()
+    }
 }
 
 impl<T: EndianRead + EndianWrite> From<T> for DataHolder<T> {

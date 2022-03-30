@@ -207,7 +207,9 @@ impl PacketV1 {
 
             if self.base.packet_type == PacketType::Data && !self.base.flags.multi_ack() {
                 let out: Vec<u8> = context.decipher.decrypt(&self.base.payload)?;
-                self.base.rmc_request = out.as_slice().try_into()?;
+                self.base.rmc_request = out
+                    .read_le(0)
+                    .map_err(|_| "RMC Request could not be parsed")?;
             }
         }
 

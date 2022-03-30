@@ -18,6 +18,15 @@ impl<T: EndianRead + EndianWrite> DataHolder<T> {
     }
 }
 
+impl<T: EndianRead + EndianWrite> From<T> for DataHolder<T> {
+    fn from(object: T) -> Self {
+        Self {
+            name: NexString::default(),
+            object,
+        }
+    }
+}
+
 impl<T: EndianRead + EndianWrite> EndianRead for DataHolder<T> {
     fn try_read_le(bytes: &[u8]) -> Result<ReadOutput<Self>, Error> {
         let mut stream = StreamContainer::new(bytes);

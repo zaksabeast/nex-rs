@@ -80,7 +80,6 @@ impl EndianWrite for RMCRequest {
             stream.write_stream_le(&self.custom_id)?;
         }
 
-        stream.write_stream_le(&self.custom_id)?;
         stream.write_stream_le(&self.call_id)?;
         stream.write_stream_le(&self.method_id)?;
         stream.write_stream_bytes(&self.parameters)?;

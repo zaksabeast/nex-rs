@@ -20,14 +20,9 @@ impl<T: EndianRead + EndianWrite> DataHolder<T> {
     pub fn get_name(&self) -> NexString {
         self.name.clone()
     }
-}
 
-impl<T: EndianRead + EndianWrite> From<T> for DataHolder<T> {
-    fn from(object: T) -> Self {
-        Self {
-            name: NexString::default(),
-            object,
-        }
+    pub fn into_object(self) -> T {
+        self.object
     }
 }
 

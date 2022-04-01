@@ -1,29 +1,26 @@
+use chrono::{Datelike, Timelike};
 use no_std_io::{
     Cursor, EndianRead, EndianWrite, Error, ReadOutput, StreamContainer, StreamWriter,
 };
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, PartialEq)]
 pub struct DateTime {
     value: u64,
 }
 
 impl DateTime {
+    pub fn now() -> Self {
+        chrono::Utc::now().into()
+    }
+
     pub fn new(value: u64) -> Self {
         Self { value }
     }
 
-    pub fn make(
-        &mut self,
-        year: u64,
-        month: u64,
-        day: u64,
-        hour: u64,
-        minute: u64,
-        second: u64,
-    ) -> u64 {
-        self.value =
+    pub fn from_time(year: u64, month: u64, day: u64, hour: u64, minute: u64, second: u64) -> Self {
+        let value =
             second | (minute << 6) | (hour << 12) | (day << 17) | (month << 22) | (year << 26);
-        self.value
+        DateTime { value }
     }
 
     pub fn get_value(&self) -> u64 {
@@ -34,6 +31,12 @@ impl DateTime {
 impl From<u64> for DateTime {
     fn from(raw: u64) -> Self {
         Self::new(raw)
+    }
+}
+
+impl From<DateTime> for u64 {
+    fn from(datetime: DateTime) -> Self {
+        datetime.value
     }
 }
 
@@ -61,5 +64,18 @@ impl EndianWrite for DateTime {
 
     fn try_write_be(&self, dst: &mut [u8]) -> Result<usize, Error> {
         unimplemented!()
+    }
+}
+
+impl From<chrono::DateTime<chrono::Utc>> for DateTime {
+    fn from(datetime: chrono::DateTime<chrono::Utc>) -> Self {
+        DateTime::from_time(
+            datetime.year().try_into().unwrap_or_default(),
+            datetime.month().into(),
+            datetime.day().into(),
+            datetime.hour().into(),
+            datetime.minute().into(),
+            datetime.second().into(),
+        )
     }
 }

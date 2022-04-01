@@ -2,7 +2,7 @@ use crate::rc4::Rc4;
 use hmac::{Hmac, Mac};
 use md5::Md5;
 
-struct KerberosEncryption {
+pub struct KerberosEncryption {
     key: Vec<u8>,
     cipher: Rc4,
 }
@@ -51,7 +51,7 @@ impl KerberosEncryption {
     }
 }
 
-fn derive_kerberos_key(principal_id: u32, password: &[u8]) -> [u8; 16] {
+pub fn derive_kerberos_key(principal_id: u32, password: &[u8]) -> [u8; 16] {
     let hash_count = 65000 + (principal_id % 1024);
 
     // This is a bit awkward, but it allows

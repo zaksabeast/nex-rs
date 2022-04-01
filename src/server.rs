@@ -181,7 +181,7 @@ pub trait Server: EventHandler {
         }
     }
 
-    async fn handle_socket_message(&mut self) -> Result<(), &'static str> {
+    async fn handle_socket_message(&self) -> Result<(), &'static str> {
         let mut buf: Vec<u8> = vec![0; 0x200];
         let base = self.get_base();
         let socket = match &base.socket {
@@ -367,7 +367,7 @@ pub trait Server: EventHandler {
     }
 
     async fn send(
-        &mut self,
+        &self,
         client: &mut ClientConnection,
         packet: &mut PacketV1,
     ) -> Result<(), &'static str> {
@@ -393,7 +393,7 @@ pub trait Server: EventHandler {
     }
 
     async fn send_fragment(
-        &mut self,
+        &self,
         client: &mut ClientConnection,
         packet: &mut PacketV1,
         fragment_id: u8,

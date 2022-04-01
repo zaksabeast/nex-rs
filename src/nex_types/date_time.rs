@@ -1,7 +1,7 @@
-use chrono::{Datelike, Timelike};
 use no_std_io::{
     Cursor, EndianRead, EndianWrite, Error, ReadOutput, StreamContainer, StreamWriter,
 };
+use time::OffsetDateTime;
 
 #[derive(Debug, Default, PartialEq)]
 pub struct DateTime {
@@ -10,7 +10,7 @@ pub struct DateTime {
 
 impl DateTime {
     pub fn now() -> Self {
-        chrono::Utc::now().into()
+        OffsetDateTime::now_utc().into()
     }
 
     pub fn new(value: u64) -> Self {
@@ -67,11 +67,14 @@ impl EndianWrite for DateTime {
     }
 }
 
-impl From<chrono::DateTime<chrono::Utc>> for DateTime {
-    fn from(datetime: chrono::DateTime<chrono::Utc>) -> Self {
+impl From<OffsetDateTime> for DateTime {
+    fn from(datetime: OffsetDateTime) -> Self {
         DateTime::from_time(
             datetime.year().try_into().unwrap_or_default(),
-            datetime.month().into(),
+            {
+                let month: u8 = datetime.month().into();
+                month.into()
+            },
             datetime.day().into(),
             datetime.hour().into(),
             datetime.minute().into(),

@@ -29,10 +29,8 @@ impl Packet for PacketV1 {
                 let payload_len = self.base.payload.len();
 
                 if payload_len > 0 {
-                    self.base.payload = context
-                        .cipher
-                        .encrypt(&self.base.payload)
-                        .expect("Encrypt failed");
+                    self.base.payload =
+                        context.encrypt(&self.base.payload).expect("Encrypt failed");
                 }
             }
 
@@ -41,7 +39,7 @@ impl Packet for PacketV1 {
             }
         }
 
-        let type_flags: u16 = if context.flags_version == 0 {
+        let type_flags: u16 = if context.flags_version() == 0 {
             u16::from(self.base.packet_type) | u16::from(self.base.flags) << 3
         } else {
             u16::from(self.base.packet_type) | u16::from(self.base.flags) << 4
@@ -77,7 +75,7 @@ impl Packet for PacketV1 {
         let signature = self
             .calculate_signature(
                 header,
-                &context.client_connection_signature,
+                &context.client_connection_signature(),
                 &options,
                 context,
             )
@@ -178,7 +176,7 @@ impl PacketV1 {
         let packet_type;
         let flags;
 
-        if context.flags_version == 0 {
+        if context.flags_version() == 0 {
             packet_type = type_flags & 0x7;
             flags = type_flags >> 0x3;
         } else {
@@ -206,7 +204,7 @@ impl PacketV1 {
             self.base.payload = stream.default_read_byte_stream(payload_size);
 
             if self.base.packet_type == PacketType::Data && !self.base.flags.multi_ack() {
-                let out: Vec<u8> = context.decipher.decrypt(&self.base.payload)?;
+                let out: Vec<u8> = context.decrypt(&self.base.payload)?;
                 self.base.rmc_request = out
                     .read_le(0)
                     .map_err(|_| "RMC Request could not be parsed")?;
@@ -216,7 +214,7 @@ impl PacketV1 {
         let header = &data[2..14];
         let calculated_signature = self.calculate_signature(
             header,
-            &context.server_connection_signature,
+            &context.server_connection_signature(),
             &options,
             context,
         )?;
@@ -312,12 +310,12 @@ impl PacketV1 {
         }
 
         let payload = &self.base.payload;
-        let key = &context.signature_key;
-        let signature_base = context.signature_base;
+        let key = context.signature_key();
+        let signature_base = context.signature_base();
 
         let mut mac = Hmac::<Md5>::new_from_slice(key).map_err(|_| "Invalid hamc key size")?;
         mac.update(&header[4..]);
-        mac.update(&context.session_key);
+        mac.update(context.session_key());
         mac.update(&signature_base.to_le_bytes());
         mac.update(connection_signature);
         mac.update(options);

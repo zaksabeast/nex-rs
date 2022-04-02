@@ -4,19 +4,27 @@ use crate::{
     rc4::Rc4,
     server::ServerSettings,
 };
+use getset::{CopyGetters, Getters};
 use std::net::SocketAddr;
 
-#[derive(Clone)]
+#[derive(Clone, CopyGetters, Getters)]
+#[getset(skip)]
 pub struct ClientContext {
-    pub cipher: Rc4,
-    pub decipher: Rc4,
-    pub flags_version: u32,
-    pub prudp_version: u32,
-    pub server_connection_signature: Vec<u8>,
-    pub client_connection_signature: Vec<u8>,
-    pub signature_key: [u8; 16],
-    pub signature_base: u32,
-    pub session_key: Vec<u8>,
+    #[getset(get_copy = "pub")]
+    flags_version: u32,
+    #[getset(get_copy = "pub")]
+    signature_base: u32,
+    #[getset(get = "pub")]
+    server_connection_signature: Vec<u8>,
+    #[getset(get = "pub")]
+    client_connection_signature: Vec<u8>,
+    #[getset(get = "pub")]
+    signature_key: [u8; 16],
+    #[getset(get = "pub")]
+    session_key: Vec<u8>,
+    cipher: Rc4,
+    decipher: Rc4,
+    prudp_version: u32,
 }
 
 impl ClientContext {
@@ -32,6 +40,14 @@ impl ClientContext {
             client_connection_signature: vec![],
             session_key: vec![],
         }
+    }
+
+    pub fn encrypt(&mut self, data: &[u8]) -> Result<Vec<u8>, &'static str> {
+        self.cipher.encrypt(data)
+    }
+
+    pub fn decrypt(&mut self, data: &[u8]) -> Result<Vec<u8>, &'static str> {
+        self.decipher.decrypt(data)
     }
 }
 

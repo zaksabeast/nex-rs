@@ -307,7 +307,7 @@ pub trait Server: EventHandler {
         packet.set_packet_type(PacketType::Ping);
         packet.set_flags(PacketFlag::Ack | PacketFlag::Reliable);
 
-        self.send(client, &mut packet).await?;
+        self.send(client, packet).await?;
         Ok(())
     }
 
@@ -380,12 +380,13 @@ pub trait Server: EventHandler {
     async fn send(
         &self,
         client: &mut ClientConnection,
-        packet: &mut PacketV1,
+        mut packet: PacketV1,
     ) -> Result<(), &'static str> {
         let fragment_size: usize = self.get_base().settings.fragment_size.into();
         let data = packet.get_payload().to_vec();
         let fragment_count = data.len() / fragment_size;
         let mut fragment_data = data.as_slice();
+        let packet = &mut packet;
 
         for i in 0..fragment_count {
             let fragment_id: u8 = (i + 1).try_into().map_err(|_| "Too many fragments!")?;

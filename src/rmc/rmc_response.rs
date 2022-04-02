@@ -8,7 +8,7 @@ const ERROR_MASK: u32 = 1 << 31;
 pub struct RMCResponse {
     pub protocol_id: u8,
     pub custom_id: u16,
-    pub success: u8,
+    pub is_success: bool,
     pub call_id: u32,
     pub method_id: u32,
     pub data: Vec<u8>,
@@ -17,7 +17,7 @@ pub struct RMCResponse {
 
 impl RMCResponse {
     pub fn set_success(&mut self, method_id: u32, data: &[u8]) {
-        self.success = 1;
+        self.is_success = true;
         self.method_id = method_id;
         self.data = data.to_vec();
     }
@@ -27,7 +27,7 @@ impl RMCResponse {
             error_code |= ERROR_MASK;
         }
 
-        self.success = 0;
+        self.is_success = false;
         self.error_code = error_code;
     }
 }
@@ -64,15 +64,15 @@ impl EndianRead for RMCResponse {
             0
         };
 
-        let success = stream.read_stream_le::<u8>()?;
+        let is_success = stream.read_stream_le()?;
 
         let base = if protocol_id == 0x7f { 16 } else { 14 };
 
-        let rmc_response = if success == 1 {
+        let rmc_response = if is_success {
             Self {
                 protocol_id,
                 custom_id,
-                success,
+                is_success,
                 call_id: stream.read_stream_le()?,
                 method_id: stream.read_stream_le()?,
                 data: stream.default_read_byte_stream(bytes_len - base),
@@ -82,7 +82,7 @@ impl EndianRead for RMCResponse {
             Self {
                 protocol_id,
                 custom_id,
-                success,
+                is_success,
                 error_code: stream.read_stream_le()?,
                 call_id: stream.read_stream_le()?,
                 method_id: 0,
@@ -102,7 +102,7 @@ impl EndianWrite for RMCResponse {
         // 16 is when including custom id
         let mut base = if self.protocol_id == 0x7f { 16 } else { 14 };
 
-        if self.success == 1 {
+        if self.is_success {
             base += 8 + self.data.len();
         }
 
@@ -124,7 +124,9 @@ impl EndianWrite for RMCResponse {
             stream.write_stream_le(&self.custom_id)?;
         }
 
-        if self.success == 1 {
+        stream.write_stream_le(&self.is_success)?;
+
+        if self.is_success {
             stream.write_stream_le(&self.call_id)?;
             stream.write_stream_le(&(self.method_id | 0x8000))?;
             stream.write_stream_bytes(&self.data)?;

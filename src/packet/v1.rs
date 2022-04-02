@@ -96,7 +96,7 @@ impl Packet for PacketV1 {
 }
 
 impl PacketV1 {
-    pub fn new(data: Vec<u8>, context: &mut ClientContext) -> Result<Self, &'static str> {
+    pub fn read_packet(context: &mut ClientContext, data: Vec<u8>) -> Result<Self, &'static str> {
         let data_len = data.len();
 
         let mut packet = Self {
@@ -340,7 +340,7 @@ mod test {
         let bytes = BASE_PACKET.to_vec();
         let mut context = ClientContext::default();
         let mut packet =
-            PacketV1::new(bytes.clone(), &mut context).expect("Should have succeeded!");
+            PacketV1::read_packet(&mut context, bytes.clone()).expect("Should have succeeded!");
         let result = packet.to_bytes(&mut context);
         assert_eq!(result, bytes);
     }
@@ -359,7 +359,8 @@ mod test {
             ];
 
             let mut context = ClientContext::default();
-            let packet = PacketV1::new(bytes, &mut context).expect("Should have succeeded!");
+            let packet =
+                PacketV1::read_packet(&mut context, bytes).expect("Should have succeeded!");
 
             assert_eq!(packet.base.packet_type, PacketType::Syn);
             assert_eq!(packet.base.flags.needs_ack(), true);
@@ -372,7 +373,8 @@ mod test {
         fn should_encode_packet() {
             let bytes = BASE_PACKET.to_vec();
             let mut context = ClientContext::default();
-            let mut packet = PacketV1::new(bytes, &mut context).expect("Should have succeeded!");
+            let mut packet =
+                PacketV1::read_packet(&mut context, bytes).expect("Should have succeeded!");
 
             packet.base.packet_type = PacketType::Syn;
             packet.base.flags.clear_flags();
@@ -407,7 +409,8 @@ mod test {
             ];
 
             let mut context = ClientContext::default();
-            let packet = PacketV1::new(bytes, &mut context).expect("Should have succeeded!");
+            let packet =
+                PacketV1::read_packet(&mut context, bytes).expect("Should have succeeded!");
 
             assert_eq!(packet.base.packet_type, PacketType::Connect);
             assert_eq!(packet.base.flags.reliable(), true);
@@ -424,7 +427,8 @@ mod test {
         fn should_encode_packet() {
             let bytes = BASE_PACKET.to_vec();
             let mut context = ClientContext::default();
-            let mut packet = PacketV1::new(bytes, &mut context).expect("Should have succeeded!");
+            let mut packet =
+                PacketV1::read_packet(&mut context, bytes).expect("Should have succeeded!");
 
             packet.base.packet_type = PacketType::Connect;
             packet.base.flags.clear_flags();
@@ -462,7 +466,8 @@ mod test {
             ];
 
             let mut context = ClientContext::default();
-            let packet = PacketV1::new(bytes, &mut context).expect("Should have succeeded!");
+            let packet =
+                PacketV1::read_packet(&mut context, bytes).expect("Should have succeeded!");
 
             assert_eq!(packet.base.packet_type, PacketType::Data);
             assert_eq!(packet.base.flags.reliable(), true);
@@ -483,7 +488,8 @@ mod test {
         fn should_encode_packet() {
             let bytes = BASE_PACKET.to_vec();
             let mut context = ClientContext::default();
-            let mut packet = PacketV1::new(bytes, &mut context).expect("Should have succeeded!");
+            let mut packet =
+                PacketV1::read_packet(&mut context, bytes).expect("Should have succeeded!");
 
             packet.base.packet_type = PacketType::Data;
             packet.base.flags.clear_flags();
@@ -519,7 +525,8 @@ mod test {
                 0x5b, 0x10,
             ];
             let mut context = ClientContext::default();
-            let packet = PacketV1::new(bytes, &mut context).expect("Should have succeeded!");
+            let packet =
+                PacketV1::read_packet(&mut context, bytes).expect("Should have succeeded!");
 
             assert_eq!(packet.base.packet_type, PacketType::Disconnect);
             assert_eq!(packet.base.flags.reliable(), true);
@@ -532,7 +539,8 @@ mod test {
         fn should_encode_packet() {
             let bytes = BASE_PACKET.to_vec();
             let mut context = ClientContext::default();
-            let mut packet = PacketV1::new(bytes, &mut context).expect("Should have succeeded!");
+            let mut packet =
+                PacketV1::read_packet(&mut context, bytes).expect("Should have succeeded!");
 
             packet.base.packet_type = PacketType::Disconnect;
             packet.base.flags.clear_flags();
@@ -562,7 +570,8 @@ mod test {
                 0x91, 0x2b,
             ];
             let mut context = ClientContext::default();
-            let packet = PacketV1::new(bytes, &mut context).expect("Should have succeeded!");
+            let packet =
+                PacketV1::read_packet(&mut context, bytes).expect("Should have succeeded!");
 
             assert_eq!(packet.base.packet_type, PacketType::Ping);
             assert_eq!(packet.base.flags.needs_ack(), true);
@@ -574,7 +583,8 @@ mod test {
         fn should_encode_packet() {
             let bytes = BASE_PACKET.to_vec();
             let mut context = ClientContext::default();
-            let mut packet = PacketV1::new(bytes, &mut context).expect("Should have succeeded!");
+            let mut packet =
+                PacketV1::read_packet(&mut context, bytes).expect("Should have succeeded!");
 
             packet.base.packet_type = PacketType::Ping;
             packet.base.flags.clear_flags();

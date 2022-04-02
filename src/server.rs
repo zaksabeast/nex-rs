@@ -224,7 +224,7 @@ pub trait Server: EventHandler {
             }
         };
 
-        let packet = client.new_packet(buf)?;
+        let packet = client.read_packet(buf)?;
 
         client.set_kick_timer(Some(base.settings.ping_timeout));
 
@@ -297,7 +297,7 @@ pub trait Server: EventHandler {
     }
 
     async fn send_ping(&mut self, client: &mut ClientConnection) -> Result<(), &'static str> {
-        let mut packet = client.new_packet(vec![])?;
+        let mut packet = client.read_packet(vec![])?;
 
         packet.set_source(0xa1);
         packet.set_destination(0xaf);
@@ -315,7 +315,7 @@ pub trait Server: EventHandler {
         nex_version: u32,
         payload: Option<Vec<u8>>,
     ) -> Result<(), &'static str> {
-        let mut ack_packet = client.new_packet(vec![])?;
+        let mut ack_packet = client.read_packet(vec![])?;
 
         ack_packet.set_source(packet.get_destination());
         ack_packet.set_destination(packet.get_source());

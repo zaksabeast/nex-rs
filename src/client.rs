@@ -102,8 +102,8 @@ impl ClientConnection {
         packet.to_bytes(&mut self.context)
     }
 
-    pub fn new_packet(&mut self, data: Vec<u8>) -> Result<PacketV1, &'static str> {
-        PacketV1::new(data, &mut self.context)
+    pub fn read_packet(&mut self, data: Vec<u8>) -> Result<PacketV1, &'static str> {
+        PacketV1::read_packet(&mut self.context, data)
     }
 
     pub fn get_session_id(&self) -> u8 {

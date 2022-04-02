@@ -55,7 +55,7 @@ impl Default for ClientContext {
 pub struct ClientConnection {
     address: SocketAddr,
     secure_key: Vec<u8>,
-    session_id: u32,
+    session_id: u8,
     pid: u32,
     local_station_url: String,
     connection_id: u32,
@@ -95,8 +95,20 @@ impl ClientConnection {
         PacketV1::new(data, &mut self.context)
     }
 
+    pub fn get_session_id(&self) -> u8 {
+        self.session_id
+    }
+
+    pub fn set_session_key(&mut self, key: Vec<u8>) {
+        self.context.session_key = key;
+    }
+
     pub fn set_client_connection_signature(&mut self, client_connection_signature: Vec<u8>) {
         self.context.client_connection_signature = client_connection_signature;
+    }
+
+    pub fn get_client_connection_signature(&mut self) -> &[u8] {
+        &self.context.client_connection_signature
     }
 
     pub fn set_server_connection_signature(&mut self, server_connection_signature: Vec<u8>) {

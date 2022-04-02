@@ -20,9 +20,18 @@ pub struct ClientContext {
 }
 
 impl ClientContext {
-    pub fn set_access_key(&mut self, access_key: &str) {
-        self.signature_base = access_key.as_bytes().iter().map(|byte| *byte as u32).sum();
-        self.signature_key = crate::md5::hash(access_key.as_bytes()).to_vec();
+    pub fn new(flags_version: u32, prudp_version: u32, access_key: &str) -> Self {
+        Self {
+            flags_version,
+            prudp_version,
+            signature_key: crate::md5::hash(access_key.as_bytes()).to_vec(),
+            signature_base: access_key.as_bytes().iter().map(|byte| *byte as u32).sum(),
+            cipher: Rc4::new(&[0]),
+            decipher: Rc4::new(&[0]),
+            server_connection_signature: vec![],
+            client_connection_signature: vec![],
+            session_key: vec![],
+        }
     }
 }
 
@@ -59,22 +68,8 @@ pub struct ClientConnection {
 
 impl ClientConnection {
     pub fn new(address: SocketAddr, settings: &ServerSettings) -> Self {
-        let mut context = ClientContext {
-            cipher: Rc4::new(&[0]),
-            decipher: Rc4::new(&[0]),
-            flags_version: settings.get_flags_version(),
-            prudp_version: settings.get_prudp_version(),
-            server_connection_signature: vec![],
-            client_connection_signature: vec![],
-            signature_key: vec![],
-            signature_base: 0,
-            session_key: vec![],
-        };
-        context.set_access_key(&settings.get_access_key());
-
         Self {
             address,
-            context,
             secure_key: vec![],
             session_id: 0,
             pid: 0,
@@ -84,6 +79,11 @@ impl ClientConnection {
             sequence_id_in: Counter::default(),
             sequence_id_out: Counter::default(),
             kick_timer: None,
+            context: ClientContext::new(
+                settings.get_flags_version(),
+                settings.get_prudp_version(),
+                &settings.get_access_key(),
+            ),
         }
     }
 
@@ -147,10 +147,6 @@ impl ClientConnection {
     fn update_rc4_key(&mut self, rc4_key: &[u8]) {
         self.context.cipher = Rc4::new(rc4_key);
         self.context.decipher = Rc4::new(rc4_key);
-    }
-
-    pub fn update_access_key(&mut self, access_key: String) {
-        self.context.set_access_key(&access_key);
     }
 
     pub fn get_kick_timer(&self) -> Option<u32> {

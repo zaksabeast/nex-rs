@@ -226,8 +226,7 @@ pub trait Server: EventHandler {
             Some(client) => client,
             None => {
                 let settings = &base.settings;
-                let mut new_client = ClientConnection::new(peer, settings);
-                new_client.update_access_key(self.get_access_key());
+                let new_client = ClientConnection::new(peer, settings);
                 clients.push(new_client);
                 // We just pushed a client, so we know one exists
                 clients.last_mut().unwrap()
@@ -258,7 +257,6 @@ pub trait Server: EventHandler {
             PacketType::Connect => {
                 let client_connection_signature = packet.get_connection_signature().to_vec();
                 client.set_client_connection_signature(client_connection_signature);
-                client.update_access_key(self.get_access_key());
             }
             _ => {}
         }

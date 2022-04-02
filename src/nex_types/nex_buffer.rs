@@ -5,6 +5,16 @@ use no_std_io::{
 #[derive(Debug, Default)]
 pub struct NexBuffer(Vec<u8>);
 
+impl NexBuffer {
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+}
+
 impl EndianRead for NexBuffer {
     fn try_read_le(bytes: &[u8]) -> Result<ReadOutput<Self>, Error> {
         let mut stream = StreamContainer::new(bytes);

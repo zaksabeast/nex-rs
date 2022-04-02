@@ -388,12 +388,13 @@ pub trait Server: EventHandler {
         let mut fragment_data = data.as_slice();
         let packet = &mut packet;
 
-        for i in 0..fragment_count {
+        for i in 0..=fragment_count {
             let fragment_id: u8 = (i + 1).try_into().map_err(|_| "Too many fragments!")?;
 
             if fragment_data.len() < fragment_size {
                 packet.set_payload(fragment_data.to_vec());
-                self.send_fragment(client, packet, fragment_id).await?;
+                // Last fragment is always 0
+                self.send_fragment(client, packet, 0).await?;
             } else {
                 packet.set_payload(data[..fragment_size].to_vec());
                 self.send_fragment(client, packet, fragment_id).await?;

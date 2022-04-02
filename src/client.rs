@@ -2,7 +2,6 @@ use crate::{
     counter::Counter,
     packet::{Packet, PacketV1},
     rc4::Rc4,
-    server::ServerSettings,
 };
 use getset::{CopyGetters, Getters};
 use std::net::SocketAddr;
@@ -83,7 +82,7 @@ pub struct ClientConnection {
 }
 
 impl ClientConnection {
-    pub fn new(address: SocketAddr, settings: &ServerSettings) -> Self {
+    pub fn new(address: SocketAddr, context: ClientContext) -> Self {
         Self {
             address,
             secure_key: vec![],
@@ -95,11 +94,7 @@ impl ClientConnection {
             sequence_id_in: Counter::default(),
             sequence_id_out: Counter::default(),
             kick_timer: None,
-            context: ClientContext::new(
-                settings.get_flags_version(),
-                settings.get_prudp_version(),
-                settings.get_access_key(),
-            ),
+            context,
         }
     }
 

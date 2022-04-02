@@ -1,9 +1,10 @@
 use crate::{
-    client::ClientConnection,
+    client::{ClientConnection, ClientContext},
     compression::{dummy_compression, zlib_compression},
     packet::{Packet, PacketFlag, PacketType, PacketV1},
 };
 use async_trait::async_trait;
+use getset::{CopyGetters, Getters, Setters};
 use no_std_io::{StreamContainer, StreamWriter};
 use rand::RngCore;
 use std::net::SocketAddr;
@@ -43,15 +44,21 @@ pub trait EventHandler {
     ) -> Result<(), &'static str>;
 }
 
+#[derive(Debug, Getters, CopyGetters, Setters)]
+#[getset(skip)]
 pub struct ServerSettings {
+    #[getset(set = "pub")]
     access_key: String,
-    prudp_version: u32,
+    #[getset(set = "pub")]
     nex_version: u32,
+    #[getset(set = "pub")]
+    prudp_version: u32,
+    #[getset(set = "pub")]
     fragment_size: u16,
+    flags_version: u32,
     use_packet_compression: bool,
     ping_timeout: u32,
     signature_version: u32,
-    flags_version: u32,
     checksum_version: u32,
     kerberos_key_size: u32,
     kerberos_key_derivation: u32,
@@ -59,24 +66,8 @@ pub struct ServerSettings {
 }
 
 impl ServerSettings {
-    pub fn get_access_key(&self) -> &str {
-        &self.access_key
-    }
-
-    pub fn get_flags_version(&self) -> u32 {
-        self.flags_version
-    }
-
-    pub fn get_prudp_version(&self) -> u32 {
-        self.prudp_version
-    }
-
-    pub fn set_nex_version(&mut self, nex_version: u32) {
-        self.nex_version = nex_version;
-    }
-
-    pub fn set_fragment_size(&mut self, fragment_size: u16) {
-        self.fragment_size = fragment_size;
+    pub fn create_client_context(&self) -> ClientContext {
+        ClientContext::new(self.flags_version, self.prudp_version, &self.access_key)
     }
 }
 
@@ -226,7 +217,7 @@ pub trait Server: EventHandler {
             Some(client) => client,
             None => {
                 let settings = &base.settings;
-                let new_client = ClientConnection::new(peer, settings);
+                let new_client = ClientConnection::new(peer, settings.create_client_context());
                 clients.push(new_client);
                 // We just pushed a client, so we know one exists
                 clients.last_mut().unwrap()

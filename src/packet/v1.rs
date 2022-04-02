@@ -75,7 +75,7 @@ impl Packet for PacketV1 {
         let signature = self
             .calculate_signature(
                 header,
-                &context.client_connection_signature(),
+                context.client_connection_signature(),
                 &options,
                 context,
             )
@@ -214,7 +214,7 @@ impl PacketV1 {
         let header = &data[2..14];
         let calculated_signature = self.calculate_signature(
             header,
-            &context.server_connection_signature(),
+            context.server_connection_signature(),
             &options,
             context,
         )?;

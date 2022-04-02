@@ -14,22 +14,33 @@ use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 use tokio::time;
 
+#[async_trait(?Send)]
 pub trait EventHandler {
-    fn on_syn(&self, client: &mut ClientConnection, packet: &PacketV1) -> Result<(), &'static str>;
-    fn on_connect(
+    async fn on_syn(
         &self,
         client: &mut ClientConnection,
         packet: &PacketV1,
     ) -> Result<(), &'static str>;
-    fn on_data(&self, client: &mut ClientConnection, packet: &PacketV1)
-        -> Result<(), &'static str>;
-    fn on_disconnect(
+    async fn on_connect(
         &self,
         client: &mut ClientConnection,
         packet: &PacketV1,
     ) -> Result<(), &'static str>;
-    fn on_ping(&self, client: &mut ClientConnection, packet: &PacketV1)
-        -> Result<(), &'static str>;
+    async fn on_data(
+        &self,
+        client: &mut ClientConnection,
+        packet: &PacketV1,
+    ) -> Result<(), &'static str>;
+    async fn on_disconnect(
+        &self,
+        client: &mut ClientConnection,
+        packet: &PacketV1,
+    ) -> Result<(), &'static str>;
+    async fn on_ping(
+        &self,
+        client: &mut ClientConnection,
+        packet: &PacketV1,
+    ) -> Result<(), &'static str>;
 }
 
 pub struct ServerSettings {
@@ -254,19 +265,19 @@ pub trait Server: EventHandler {
 
         match packet_type {
             PacketType::Syn => {
-                self.on_syn(client, &packet)?;
+                self.on_syn(client, &packet).await?;
             }
             PacketType::Connect => {
-                self.on_connect(client, &packet)?;
+                self.on_connect(client, &packet).await?;
             }
             PacketType::Disconnect => {
-                self.on_disconnect(client, &packet)?;
+                self.on_disconnect(client, &packet).await?;
             }
             PacketType::Data => {
-                self.on_data(client, &packet)?;
+                self.on_data(client, &packet).await?;
             }
             PacketType::Ping => {
-                self.on_ping(client, &packet)?;
+                self.on_ping(client, &packet).await?;
             }
         };
 

@@ -6,29 +6,52 @@ const ERROR_MASK: u32 = 1 << 31;
 
 #[derive(Default, Debug)]
 pub struct RMCResponse {
-    pub protocol_id: u8,
-    pub custom_id: u16,
-    pub is_success: bool,
-    pub call_id: u32,
-    pub method_id: u32,
-    pub data: Vec<u8>,
-    pub error_code: u32,
+    protocol_id: u8,
+    custom_id: u16,
+    is_success: bool,
+    call_id: u32,
+    method_id: u32,
+    data: Vec<u8>,
+    error_code: u32,
 }
 
 impl RMCResponse {
-    pub fn set_success(&mut self, method_id: u32, data: &[u8]) {
-        self.is_success = true;
-        self.method_id = method_id;
-        self.data = data.to_vec();
+    pub fn new_success(
+        protocol_id: u8,
+        method_id: impl Into<u32>,
+        call_id: u32,
+        data: Vec<u8>,
+    ) -> Self {
+        Self {
+            data,
+            protocol_id,
+            method_id: method_id.into(),
+            call_id,
+            is_success: true,
+            error_code: 0,
+            custom_id: 0,
+        }
     }
 
-    pub fn set_error(&mut self, mut error_code: u32) {
+    pub fn new_error(
+        protocol_id: u8,
+        method_id: impl Into<u32>,
+        call_id: u32,
+        mut error_code: u32,
+    ) -> Self {
         if error_code & ERROR_MASK == 0 {
             error_code |= ERROR_MASK;
         }
 
-        self.is_success = false;
-        self.error_code = error_code;
+        Self {
+            protocol_id,
+            method_id: method_id.into(),
+            call_id,
+            error_code,
+            data: vec![],
+            is_success: false,
+            custom_id: 0,
+        }
     }
 }
 

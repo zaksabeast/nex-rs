@@ -74,6 +74,10 @@ impl ServerSettings {
     pub fn set_nex_version(&mut self, nex_version: u32) {
         self.nex_version = nex_version;
     }
+
+    pub fn set_fragment_size(&mut self, fragment_size: u16) {
+        self.fragment_size = fragment_size;
+    }
 }
 
 impl Default for ServerSettings {
@@ -133,6 +137,10 @@ pub trait Server: EventHandler {
 
     fn set_nex_version(&mut self, nex_version: u32) {
         self.get_mut_base().settings.nex_version = nex_version;
+    }
+
+    fn set_fragment_size(&mut self, fragment_size: u16) {
+        self.get_mut_base().settings.fragment_size = fragment_size;
     }
 
     fn get_checksum_version(&self) -> u32 {
@@ -426,6 +434,7 @@ pub trait Server: EventHandler {
             Some(socket) => Ok(socket),
             None => Err("No socket"),
         }?;
+
         Self::send_raw(socket, client, &encoded_packet).await
     }
 

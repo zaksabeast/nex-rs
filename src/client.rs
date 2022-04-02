@@ -8,7 +8,6 @@ use std::net::SocketAddr;
 
 #[derive(Clone)]
 pub struct ClientContext {
-    pub access_key: String,
     pub cipher: Rc4,
     pub decipher: Rc4,
     pub flags_version: u32,
@@ -20,10 +19,16 @@ pub struct ClientContext {
     pub session_key: Vec<u8>,
 }
 
+impl ClientContext {
+    pub fn set_access_key(&mut self, access_key: &str) {
+        self.signature_base = access_key.as_bytes().iter().map(|byte| *byte as u32).sum();
+        self.signature_key = crate::md5::hash(access_key.as_bytes()).to_vec();
+    }
+}
+
 impl Default for ClientContext {
     fn default() -> Self {
         Self {
-            access_key: String::new(),
             cipher: Rc4::new(&[0]),
             decipher: Rc4::new(&[0]),
             flags_version: 1,
@@ -54,8 +59,22 @@ pub struct ClientConnection {
 
 impl ClientConnection {
     pub fn new(address: SocketAddr, settings: &ServerSettings) -> Self {
+        let mut context = ClientContext {
+            cipher: Rc4::new(&[0]),
+            decipher: Rc4::new(&[0]),
+            flags_version: settings.get_flags_version(),
+            prudp_version: settings.get_prudp_version(),
+            server_connection_signature: vec![],
+            client_connection_signature: vec![],
+            signature_key: vec![],
+            signature_base: 0,
+            session_key: vec![],
+        };
+        context.set_access_key(&settings.get_access_key());
+
         Self {
             address,
+            context,
             secure_key: vec![],
             session_id: 0,
             pid: 0,
@@ -65,18 +84,6 @@ impl ClientConnection {
             sequence_id_in: Counter::default(),
             sequence_id_out: Counter::default(),
             kick_timer: None,
-            context: ClientContext {
-                access_key: settings.get_access_key(),
-                cipher: Rc4::new(&[0]),
-                decipher: Rc4::new(&[0]),
-                flags_version: settings.get_flags_version(),
-                prudp_version: settings.get_prudp_version(),
-                server_connection_signature: vec![],
-                client_connection_signature: vec![],
-                signature_key: vec![],
-                signature_base: 0,
-                session_key: vec![],
-            },
         }
     }
 
@@ -108,8 +115,7 @@ impl ClientConnection {
         self.sequence_id_in = Counter::default();
         self.sequence_id_out = Counter::default();
 
-        self.update_access_key(self.context.access_key.to_string());
-        self.update_rc4_key("CD&ML".as_bytes());
+        self.update_rc4_key(b"CD&ML");
 
         if self.context.prudp_version == 0 {
             self.set_client_connection_signature(vec![0; 4]);
@@ -144,8 +150,7 @@ impl ClientConnection {
     }
 
     pub fn update_access_key(&mut self, access_key: String) {
-        self.context.signature_base = access_key.as_bytes().iter().map(|byte| *byte as u32).sum();
-        self.context.signature_key = crate::md5::hash(access_key.as_bytes()).to_vec();
+        self.context.set_access_key(&access_key);
     }
 
     pub fn get_kick_timer(&self) -> Option<u32> {

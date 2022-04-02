@@ -100,6 +100,14 @@ impl From<PacketFlags> for u16 {
     }
 }
 
+impl BitOr<PacketFlag> for PacketFlags {
+    type Output = PacketFlags;
+
+    fn bitor(self, rhs: PacketFlag) -> Self::Output {
+        PacketFlags((self.0) | (rhs as u16))
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;

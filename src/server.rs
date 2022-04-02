@@ -297,15 +297,7 @@ pub trait Server: EventHandler {
     }
 
     async fn send_ping(&mut self, client: &mut ClientConnection) -> Result<(), &'static str> {
-        let mut packet = client.read_packet(vec![])?;
-
-        packet.set_source(0xa1);
-        packet.set_destination(0xaf);
-        packet.set_packet_type(PacketType::Ping);
-        packet.set_flags(PacketFlag::Ack | PacketFlag::Reliable);
-
-        self.send(client, packet).await?;
-        Ok(())
+        self.send(client, PacketV1::new_ping_packet()).await
     }
 
     async fn acknowledge_packet(
@@ -315,22 +307,13 @@ pub trait Server: EventHandler {
         nex_version: u32,
         payload: Option<Vec<u8>>,
     ) -> Result<(), &'static str> {
-        let mut ack_packet = client.read_packet(vec![])?;
-
-        ack_packet.set_source(packet.get_destination());
-        ack_packet.set_destination(packet.get_source());
-        ack_packet.set_packet_type(packet.get_packet_type());
-        ack_packet.set_sequence_id(packet.get_sequence_id());
-        ack_packet.set_fragment_id(packet.get_fragment_id());
-        ack_packet.set_flags(PacketFlag::Ack | PacketFlag::HasSize);
+        let mut ack_packet = packet.new_ack_packet();
 
         if let Some(payload) = payload {
             if !payload.is_empty() {
                 ack_packet.set_payload(payload);
             }
         }
-        ack_packet.set_substream_id(0);
-        ack_packet.set_version(1);
 
         match ack_packet.get_packet_type() {
             PacketType::Syn => {
@@ -409,10 +392,7 @@ pub trait Server: EventHandler {
         fragment_id: u8,
     ) -> Result<usize, &'static str> {
         let compressed_data = self.compress_packet(packet.get_payload());
-        let sequence_id = client
-            .increment_sequence_id_out()
-            .try_into()
-            .expect("Sequence Id does not fit into u16");
+        let sequence_id = client.increment_sequence_id_out();
 
         packet.set_sequence_id(sequence_id);
         packet.set_fragment_id(fragment_id);

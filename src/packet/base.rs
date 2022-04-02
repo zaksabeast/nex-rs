@@ -4,7 +4,6 @@ use crate::rmc::RMCRequest;
 #[derive(Debug)]
 pub struct BasePacket {
     pub(super) data: Vec<u8>,
-    pub(super) version: u8,
     pub(super) source: u8,
     pub(super) destination: u8,
     pub(super) packet_type: PacketType,
@@ -19,20 +18,28 @@ pub struct BasePacket {
 }
 
 impl BasePacket {
-    pub(super) fn new(data: Vec<u8>, version: u8) -> Self {
+    pub(super) fn new(data: Vec<u8>) -> Self {
         Self {
             data,
-            version,
+            ..Default::default()
+        }
+    }
+}
+
+impl Default for BasePacket {
+    fn default() -> Self {
+        Self {
             source: 0,
             destination: 0,
+            session_id: 0,
+            sequence_id: 0,
+            fragment_id: 0,
+            data: vec![],
+            signature: vec![],
+            connection_signature: vec![],
+            payload: vec![],
             packet_type: PacketType::Connect,
             flags: PacketFlags::new(0),
-            session_id: 0,
-            signature: vec![],
-            sequence_id: 0,
-            connection_signature: vec![],
-            fragment_id: 0,
-            payload: vec![],
             rmc_request: RMCRequest::default(),
         }
     }

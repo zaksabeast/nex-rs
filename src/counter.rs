@@ -1,18 +1,19 @@
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Counter {
-    num: usize,
+    counter: u16,
 }
 
 impl Counter {
-    pub fn new() -> Self {
-        Self::default()
-    }
-    pub fn increment(&mut self) -> usize {
-        self.num += 1;
-        self.num
+    pub fn new(initial: u16) -> Self {
+        Self { counter: initial }
     }
 
-    pub fn value(&mut self) -> usize {
-        self.num
+    pub fn increment(&mut self) -> u16 {
+        self.counter += 1;
+        self.counter
+    }
+
+    pub fn value(&mut self) -> u16 {
+        self.counter
     }
 }

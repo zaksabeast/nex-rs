@@ -4,7 +4,7 @@ use hmac::{Hmac, Mac};
 use md5::Md5;
 use no_std_io::{Cursor, Reader, StreamContainer, StreamReader, StreamWriter};
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct PacketV1 {
     base: BasePacket,
     magic: u16,
@@ -15,6 +15,8 @@ pub struct PacketV1 {
 }
 
 impl Packet for PacketV1 {
+    const VERSION: u8 = 1;
+
     fn get_base(&self) -> &BasePacket {
         &self.base
     }
@@ -96,16 +98,61 @@ impl Packet for PacketV1 {
 }
 
 impl PacketV1 {
+    pub fn new_ping_packet() -> Self {
+        Self {
+            base: BasePacket {
+                source: Self::SERVER_ID,
+                destination: Self::CLIENT_ID,
+                packet_type: PacketType::Ping,
+                flags: PacketFlag::Ack | PacketFlag::Reliable,
+                ..Default::default()
+            },
+            ..Default::default()
+        }
+    }
+
+    pub fn new_data_packet(
+        session_id: u8,
+        connection_signature: Vec<u8>,
+        payload: Vec<u8>,
+    ) -> Self {
+        Self {
+            base: BasePacket {
+                payload,
+                session_id,
+                connection_signature,
+                source: Self::SERVER_ID,
+                destination: Self::CLIENT_ID,
+                flags: PacketFlag::Reliable | PacketFlag::NeedsAck | PacketFlag::HasSize,
+                packet_type: PacketType::Data,
+                ..Default::default()
+            },
+            ..Default::default()
+        }
+    }
+
+    pub fn new_ack_packet(&self) -> Self {
+        Self {
+            base: BasePacket {
+                source: self.get_destination(),
+                destination: self.get_source(),
+                packet_type: self.get_packet_type(),
+                sequence_id: self.get_sequence_id(),
+                fragment_id: self.get_fragment_id(),
+                flags: PacketFlag::Ack | PacketFlag::HasSize,
+                ..Default::default()
+            },
+            substream_id: 0,
+            ..Default::default()
+        }
+    }
+
     pub fn read_packet(context: &mut ClientContext, data: Vec<u8>) -> Result<Self, &'static str> {
         let data_len = data.len();
 
         let mut packet = Self {
-            base: BasePacket::new(data, 1),
-            magic: 0xd0ea,
-            substream_id: 0,
-            supported_functions: 0,
-            initial_sequence_id: 0,
-            maximum_substream_id: 0,
+            base: BasePacket::new(data),
+            ..Default::default()
         };
 
         if data_len > 0 {
@@ -160,9 +207,8 @@ impl PacketV1 {
             return Err("Invalid magic");
         }
 
-        self.base.version = stream.default_read_stream_le();
-
-        if self.base.version != 1 {
+        let version: u8 = stream.default_read_stream_le();
+        if version != 1 {
             return Err("Invalid version");
         }
 

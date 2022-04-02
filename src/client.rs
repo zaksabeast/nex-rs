@@ -106,6 +106,14 @@ impl ClientConnection {
         PacketV1::read_packet(&mut self.context, data)
     }
 
+    pub fn new_data_packet(&self, payload: Vec<u8>) -> PacketV1 {
+        PacketV1::new_data_packet(
+            self.session_id,
+            self.context.client_connection_signature.to_vec(),
+            payload,
+        )
+    }
+
     pub fn get_session_id(&self) -> u8 {
         self.session_id
     }
@@ -163,7 +171,7 @@ impl ClientConnection {
         &mut self.context
     }
 
-    pub fn increment_sequence_id_out(&mut self) -> usize {
+    pub fn increment_sequence_id_out(&mut self) -> u16 {
         self.sequence_id_out.increment()
     }
 

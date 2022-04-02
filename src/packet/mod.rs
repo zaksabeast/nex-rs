@@ -14,6 +14,11 @@ use crate::client::ClientContext;
 use crate::rmc::RMCRequest;
 
 pub trait Packet {
+    const VERSION: u8;
+
+    const CLIENT_ID: u8 = 0xaf;
+    const SERVER_ID: u8 = 0xa1;
+
     fn get_base(&self) -> &BasePacket;
     fn get_mut_base(&mut self) -> &mut BasePacket;
     fn to_bytes(&mut self, context: &mut ClientContext) -> Vec<u8>;
@@ -23,13 +28,6 @@ pub trait Packet {
     }
     fn set_data(&mut self, value: Vec<u8>) {
         self.get_mut_base().data = value;
-    }
-
-    fn get_version(&self) -> u8 {
-        self.get_base().version
-    }
-    fn set_version(&mut self, value: u8) {
-        self.get_mut_base().version = value;
     }
 
     fn get_source(&self) -> u8 {

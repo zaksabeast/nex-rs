@@ -14,7 +14,7 @@ pub struct ClientContext {
     pub prudp_version: u32,
     pub server_connection_signature: Vec<u8>,
     pub client_connection_signature: Vec<u8>,
-    pub signature_key: Vec<u8>,
+    pub signature_key: [u8; 16],
     pub signature_base: u32,
     pub session_key: Vec<u8>,
 }
@@ -24,7 +24,7 @@ impl ClientContext {
         Self {
             flags_version,
             prudp_version,
-            signature_key: crate::md5::hash(access_key.as_bytes()).to_vec(),
+            signature_key: crate::md5::hash(access_key.as_bytes()),
             signature_base: access_key.as_bytes().iter().map(|byte| *byte as u32).sum(),
             cipher: Rc4::new(&[0]),
             decipher: Rc4::new(&[0]),
@@ -44,7 +44,7 @@ impl Default for ClientContext {
             prudp_version: 1,
             server_connection_signature: vec![],
             client_connection_signature: vec![],
-            signature_key: vec![],
+            signature_key: [0; 16],
             signature_base: 0,
             session_key: vec![],
         }
@@ -82,7 +82,7 @@ impl ClientConnection {
             context: ClientContext::new(
                 settings.get_flags_version(),
                 settings.get_prudp_version(),
-                &settings.get_access_key(),
+                settings.get_access_key(),
             ),
         }
     }

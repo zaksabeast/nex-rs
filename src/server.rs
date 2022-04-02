@@ -59,8 +59,8 @@ pub struct ServerSettings {
 }
 
 impl ServerSettings {
-    pub fn get_access_key(&self) -> String {
-        self.access_key.to_string()
+    pub fn get_access_key(&self) -> &str {
+        &self.access_key
     }
 
     pub fn get_flags_version(&self) -> u32 {

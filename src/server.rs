@@ -369,7 +369,7 @@ pub trait Server: EventHandler {
         self.send(client, packet).await
     }
 
-    async fn send_error<MethodId: Into<u32>, Data: Into<Vec<u8>>>(
+    async fn send_error<MethodId: Into<u32>>(
         &self,
         client: &mut ClientConnection,
         protocol_id: u8,

@@ -1,5 +1,6 @@
 use no_std_io::{
-    Cursor, EndianRead, EndianWrite, Error, ReadOutput, StreamContainer, StreamReader, StreamWriter,
+    Cursor, EndianRead, EndianWrite, Error, ReadOutput, StreamContainer, StreamReader,
+    StreamWriter, Writer,
 };
 
 const ERROR_MASK: u32 = 1 << 31;
@@ -37,17 +38,19 @@ impl RMCResponse {
         protocol_id: u8,
         method_id: impl Into<u32>,
         call_id: u32,
-        mut error_code: u32,
+        error_code: u32,
     ) -> Self {
-        if error_code & ERROR_MASK == 0 {
-            error_code |= ERROR_MASK;
-        }
+        let fixed_error_code = if error_code & ERROR_MASK == 0 {
+            error_code | ERROR_MASK
+        } else {
+            error_code
+        };
 
         Self {
             protocol_id,
-            method_id: method_id.into(),
             call_id,
-            error_code,
+            method_id: method_id.into(),
+            error_code: fixed_error_code,
             data: vec![],
             is_success: false,
             custom_id: 0,
@@ -163,5 +166,13 @@ impl EndianWrite for RMCResponse {
 
     fn try_write_be(&self, dst: &mut [u8]) -> Result<usize, Error> {
         unimplemented!()
+    }
+}
+
+impl From<RMCResponse> for Vec<u8> {
+    fn from(response: RMCResponse) -> Self {
+        let mut result: Vec<u8> = Vec::with_capacity(response.get_size());
+        result.checked_write_le(0, &response);
+        result
     }
 }

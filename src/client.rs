@@ -2,6 +2,7 @@ use crate::{
     counter::Counter,
     packet::{Packet, PacketV1},
     rc4::Rc4,
+    rmc::RMCResponse,
 };
 use getset::{CopyGetters, Getters};
 use std::net::SocketAddr;
@@ -112,6 +113,28 @@ impl ClientConnection {
             self.context.client_connection_signature.to_vec(),
             payload,
         )
+    }
+
+    pub fn new_rmc_success(
+        &self,
+        protocol_id: u8,
+        method_id: impl Into<u32>,
+        call_id: u32,
+        data: impl Into<Vec<u8>>,
+    ) -> PacketV1 {
+        let rmc_response = RMCResponse::new_success(protocol_id, method_id, call_id, data.into());
+        self.new_data_packet(rmc_response.into())
+    }
+
+    pub fn new_rmc_error(
+        &self,
+        protocol_id: u8,
+        method_id: impl Into<u32>,
+        call_id: u32,
+        error_code: u32,
+    ) -> PacketV1 {
+        let rmc_response = RMCResponse::new_error(protocol_id, method_id, call_id, error_code);
+        self.new_data_packet(rmc_response.into())
     }
 
     pub fn get_session_id(&self) -> u8 {

@@ -357,6 +357,30 @@ pub trait Server: EventHandler {
         Ok(())
     }
 
+    async fn send_success<MethodId: Into<u32>, Data: Into<Vec<u8>>>(
+        &self,
+        client: &mut ClientConnection,
+        protocol_id: u8,
+        method_id: MethodId,
+        call_id: u32,
+        data: Data,
+    ) -> Result<(), &'static str> {
+        let packet = client.new_rmc_success(protocol_id, method_id, call_id, data);
+        self.send(client, packet).await
+    }
+
+    async fn send_error<MethodId: Into<u32>, Data: Into<Vec<u8>>>(
+        &self,
+        client: &mut ClientConnection,
+        protocol_id: u8,
+        method_id: MethodId,
+        call_id: u32,
+        error_code: u32,
+    ) -> Result<(), &'static str> {
+        let packet = client.new_rmc_error(protocol_id, method_id, call_id, error_code);
+        self.send(client, packet).await
+    }
+
     async fn send(
         &self,
         client: &mut ClientConnection,

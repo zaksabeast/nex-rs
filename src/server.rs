@@ -305,7 +305,7 @@ pub trait Server: EventHandler {
         }
     }
 
-    async fn send_ping(&mut self, client: &mut ClientConnection) -> Result<(), &'static str> {
+    async fn send_ping(&self, client: &mut ClientConnection) -> Result<(), &'static str> {
         self.send(client, PacketV1::new_ping_packet()).await
     }
 

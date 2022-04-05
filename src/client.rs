@@ -195,7 +195,10 @@ impl ClientConnection {
     }
 
     pub fn increment_sequence_id_out(&mut self) -> u16 {
-        self.sequence_id_out.increment()
+        self.sequence_id_out
+            .increment()
+            .try_into()
+            .expect("Sequence id out does not fit into u16")
     }
 
     pub fn update_rc4_key(&mut self, rc4_key: &[u8]) {

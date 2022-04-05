@@ -267,6 +267,8 @@ impl PacketV1 {
             context,
         )?;
 
+        println!("Calculated signature: {:?}", calculated_signature);
+
         if calculated_signature != self.base.signature {
             return Err("Calculated signature did not match");
         }

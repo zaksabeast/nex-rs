@@ -11,6 +11,12 @@ impl<T: EndianWrite + EndianRead> From<Vec<T>> for NexList<T> {
     }
 }
 
+impl<T: EndianWrite + EndianRead> From<NexList<T>> for Vec<T> {
+    fn from(list: NexList<T>) -> Self {
+        list.0
+    }
+}
+
 impl<T: EndianWrite + EndianRead> EndianRead for NexList<T> {
     fn try_read_le(bytes: &[u8]) -> Result<ReadOutput<Self>, Error> {
         let mut stream = StreamContainer::new(bytes);

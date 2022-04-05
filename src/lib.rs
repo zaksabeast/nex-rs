@@ -5,7 +5,7 @@
 
 pub mod client;
 mod compression;
-mod counter;
+pub mod counter;
 pub mod kerberos;
 pub mod md5;
 pub mod nex_types;

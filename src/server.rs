@@ -1,3 +1,4 @@
+use crate::counter::Counter;
 use crate::{
     client::{ClientConnection, ClientContext},
     compression::{dummy_compression, zlib_compression},
@@ -94,6 +95,7 @@ impl Default for ServerSettings {
 pub struct BaseServer {
     settings: ServerSettings,
     socket: Option<UdpSocket>,
+    pub connection_id_counter: Counter,
     ping_kick_thread: Option<JoinHandle<()>>,
     clients: Arc<Mutex<Vec<ClientConnection>>>,
 }
@@ -103,6 +105,7 @@ impl BaseServer {
         Self {
             settings,
             socket: None,
+            connection_id_counter: Counter::new(10),
             ping_kick_thread: None,
             clients: Arc::new(Mutex::new(vec![])),
         }

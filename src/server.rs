@@ -200,7 +200,7 @@ pub trait Server: EventHandler {
     }
 
     async fn handle_socket_message(&self) -> Result<(), &'static str> {
-        let mut buf: Vec<u8> = vec![0; 0x200];
+        let mut buf: Vec<u8> = vec![0; 0x1000];
         let base = self.get_base();
         let socket = match &base.socket {
             Some(socket) => Ok(socket),

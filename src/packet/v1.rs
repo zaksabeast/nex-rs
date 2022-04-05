@@ -253,10 +253,7 @@ impl PacketV1 {
                 let out: Vec<u8> = context.decrypt(&self.base.payload)?;
                 self.base.rmc_request = out
                     .read_le(0)
-                    .map_err(|_|  {
-                        println!("{:?}", &self.base);
-                        "RMC Request could not be parsed"
-                    })?;
+                    .map_err(|_| "RMC Request could not be parsed")?;
             }
         }
 

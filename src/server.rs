@@ -111,10 +111,6 @@ impl BaseServer {
             clients: Arc::new(Mutex::new(vec![])),
         }
     }
-
-    fn get_socket(&self) -> &Option<UdpSocket> {
-        &self.socket
-    }
 }
 
 #[async_trait(?Send)]
@@ -140,6 +136,10 @@ pub trait Server: EventHandler {
 
     fn set_fragment_size(&mut self, fragment_size: u16) {
         self.get_mut_base().settings.fragment_size = fragment_size;
+    }
+
+    fn set_ping_timeout(&mut self, ping_timeout: u32) {
+        self.get_mut_base().settings.ping_timeout = ping_timeout;
     }
 
     fn get_checksum_version(&self) -> u32 {

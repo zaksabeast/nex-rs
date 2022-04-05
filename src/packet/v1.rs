@@ -233,6 +233,8 @@ impl PacketV1 {
         self.base.packet_type = packet_type.try_into().map_err(|_| "Invalid packet type")?;
         self.base.flags = PacketFlags::new(flags);
 
+        println!("{:?}", packet_type);
+
         self.base.session_id = stream.default_read_stream_le();
         self.substream_id = stream.default_read_stream_le();
         self.base.sequence_id = stream.default_read_stream_le();

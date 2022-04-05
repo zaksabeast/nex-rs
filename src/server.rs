@@ -267,7 +267,6 @@ pub trait Server: EventHandler {
             let nex_version = self.get_base().settings.nex_version;
             self.acknowledge_packet(&packet, client, nex_version, None)
                 .await?;
-            println!("Packet acknowledged");
         }
 
         match packet_type {

@@ -198,7 +198,7 @@ impl ClientConnection {
         self.sequence_id_out.increment()
     }
 
-    fn update_rc4_key(&mut self, rc4_key: &[u8]) {
+    pub fn update_rc4_key(&mut self, rc4_key: &[u8]) {
         self.context.cipher = Rc4::new(rc4_key);
         self.context.decipher = Rc4::new(rc4_key);
     }

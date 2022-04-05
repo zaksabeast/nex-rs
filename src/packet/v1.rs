@@ -258,12 +258,21 @@ impl PacketV1 {
         }
 
         let header = &data[2..14];
-        let calculated_signature = self.calculate_signature(
-            header,
-            context.server_connection_signature(),
-            &options,
-            context,
-        )?;
+        let calculated_signature = if self.base.packet_type == PacketType::Ping {
+            self.calculate_signature(
+                header,
+                &[0u8, 16],
+                &options,
+                context,
+            )?
+        } else {
+            self.calculate_signature(
+                header,
+                context.server_connection_signature(),
+                &options,
+                context,
+            )?
+        };
 
         if calculated_signature != self.base.signature {
             return Err("Calculated signature did not match");

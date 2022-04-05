@@ -108,7 +108,7 @@ impl BaseServer {
         }
     }
 
-    pub fn get_socket(&self) -> &Option<UdpSocket> {
+    fn get_socket(&self) -> &Option<UdpSocket> {
         &self.socket
     }
 }
@@ -261,7 +261,8 @@ pub trait Server: EventHandler {
                 || (packet_type == PacketType::Connect && packet.get_payload().is_empty()))
         {
             let nex_version = self.get_base().settings.nex_version;
-            Self::acknowledge_packet(socket, &packet, client, nex_version, None).await?;
+            self.acknowledge_packet(&packet, client, nex_version, None)
+                .await?;
         }
 
         match packet_type {
@@ -284,13 +285,13 @@ pub trait Server: EventHandler {
 
         if packet_type == PacketType::Disconnect {
             let addr = client.get_address();
-            Self::kick(&mut clients, addr);
+            self.kick(&mut clients, addr);
         }
 
         Ok(())
     }
 
-    fn kick(clients: &mut Vec<ClientConnection>, addr: SocketAddr) {
+    fn kick(&self, clients: &mut Vec<ClientConnection>, addr: SocketAddr) {
         let client_index = clients
             .iter_mut()
             .position(|potential_client| potential_client.get_address() == addr);
@@ -305,7 +306,7 @@ pub trait Server: EventHandler {
     }
 
     async fn acknowledge_packet(
-        socket: &UdpSocket,
+        &self,
         packet: &PacketV1,
         client: &mut ClientConnection,
         nex_version: u32,
@@ -356,7 +357,7 @@ pub trait Server: EventHandler {
         };
 
         let encoded_packet = &client.encode_packet(&mut ack_packet);
-        Self::send_raw(socket, client, encoded_packet).await?;
+        self.send_raw(client, encoded_packet).await?;
 
         Ok(())
     }
@@ -427,19 +428,18 @@ pub trait Server: EventHandler {
         packet.set_payload(compressed_data);
 
         let encoded_packet = client.encode_packet(packet);
+        self.send_raw(client, &encoded_packet).await
+    }
+
+    async fn send_raw(
+        &self,
+        client: &ClientConnection,
+        data: &[u8],
+    ) -> Result<usize, &'static str> {
         let socket = match &self.get_base().socket {
             Some(socket) => Ok(socket),
             None => Err("No socket"),
         }?;
-
-        Self::send_raw(socket, client, &encoded_packet).await
-    }
-
-    async fn send_raw(
-        socket: &UdpSocket,
-        client: &ClientConnection,
-        data: &[u8],
-    ) -> Result<usize, &'static str> {
         socket
             .send_to(data, client.get_address())
             .await

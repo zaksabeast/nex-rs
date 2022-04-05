@@ -58,6 +58,7 @@ pub struct ServerSettings {
     fragment_size: u16,
     flags_version: u32,
     use_packet_compression: bool,
+    #[getset(set = "pub")]
     ping_timeout: u32,
     signature_version: u32,
     checksum_version: u32,
@@ -179,7 +180,6 @@ pub trait Server: EventHandler {
                     .iter()
                     .filter_map(|c| {
                         if c.get_kick_timer() == Some(0) {
-                            println!("Client kicked");
                             None
                         } else {
                             Some(c.clone())

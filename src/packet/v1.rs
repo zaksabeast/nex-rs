@@ -358,9 +358,7 @@ impl PacketV1 {
         let payload = &self.base.payload;
         let key = context.signature_key();
         let signature_base = context.signature_base();
-
-        println!("Key: {:X?}\nHeader data: {:X?}\nSession Key: {:?}\nSignature Base: {:X?}\nConnection Signature: {:X?}\nOptions: {:X?}\nPayload: {:X?}", key, &header[4..], context.session_key(), &signature_base.to_le_bytes(), connection_signature, options, payload);
-
+        
         let mut mac = Hmac::<Md5>::new_from_slice(key).map_err(|_| "Invalid hamc key size")?;
         mac.update(&header[4..]);
         mac.update(context.session_key());

@@ -331,7 +331,7 @@ pub trait Server: EventHandler {
                 ack_packet.set_maximum_substream_id(0);
             }
             PacketType::Connect => {
-                ack_packet.set_connection_signature(client.get_server_connection_signature().to_vec());
+                ack_packet.set_connection_signature(vec![0; 16]);
                 ack_packet.set_supported_functions(packet.get_supported_functions());
                 ack_packet.set_initial_sequence_id(10000);
                 ack_packet.set_maximum_substream_id(0);

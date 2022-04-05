@@ -107,6 +107,10 @@ impl BaseServer {
             clients: Arc::new(Mutex::new(vec![])),
         }
     }
+
+    pub fn get_socket(&self) -> &Option<UdpSocket> {
+        &self.socket
+    }
 }
 
 #[async_trait(?Send)]

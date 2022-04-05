@@ -179,6 +179,7 @@ pub trait Server: EventHandler {
                     .iter()
                     .filter_map(|c| {
                         if c.get_kick_timer() == Some(0) {
+                            println!("Client kicked");
                             None
                         } else {
                             Some(c.clone())

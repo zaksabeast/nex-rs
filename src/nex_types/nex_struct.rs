@@ -4,6 +4,7 @@ use no_std_io::{
     StreamWriter, Writer,
 };
 
+#[derive(Debug)]
 pub struct NexStruct<T: EndianRead + EndianWrite> {
     raw: T,
     version: u8,

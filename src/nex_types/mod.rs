@@ -19,6 +19,9 @@ pub use nex_qbuffer::*;
 mod nex_string;
 pub use nex_string::*;
 
+mod nex_struct;
+pub use nex_struct::*;
+
 mod nex_variant;
 pub use nex_variant::*;
 

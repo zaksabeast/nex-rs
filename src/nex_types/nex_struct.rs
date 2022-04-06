@@ -13,6 +13,10 @@ impl<T: EndianRead + EndianWrite> NexStruct<T> {
     pub fn new(raw: T, version: u8) -> Self {
         Self { raw, version }
     }
+
+    pub fn into_raw(self) -> T {
+        self.raw
+    }
 }
 
 impl<T: EndianRead + EndianWrite> TryFrom<NexStruct<T>> for Vec<u8> {

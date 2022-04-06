@@ -1,16 +1,27 @@
 use core::mem;
 use no_std_io::{
-    Cursor, EndianRead, EndianWrite, Error, ReadOutput, StreamContainer, StreamReader, StreamWriter,
+    Cursor, EndianRead, EndianWrite, Error, ReadOutput, StreamContainer, StreamReader,
+    StreamWriter, Writer,
 };
 
-struct NexStruct<T: EndianRead + EndianWrite> {
+pub struct NexStruct<T: EndianRead + EndianWrite> {
     raw: T,
     version: u8,
 }
 
 impl<T: EndianRead + EndianWrite> NexStruct<T> {
-    fn new(raw: T, version: u8) -> Self {
+    pub fn new(raw: T, version: u8) -> Self {
         Self { raw, version }
+    }
+}
+
+impl<T: EndianRead + EndianWrite> TryFrom<NexStruct<T>> for Vec<u8> {
+    type Error = no_std_io::Error;
+
+    fn try_from(nex_struct: NexStruct<T>) -> Result<Self, Self::Error> {
+        let mut result = vec![];
+        result.write_le(0, &nex_struct)?;
+        Ok(result)
     }
 }
 

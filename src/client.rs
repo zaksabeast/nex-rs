@@ -190,6 +190,10 @@ impl ClientConnection {
         self.pid
     }
 
+    pub fn set_pid(&mut self, pid: u32) {
+        self.pid = pid;
+    }
+
     pub fn get_mut_context(&mut self) -> &mut ClientContext {
         &mut self.context
     }

@@ -66,14 +66,14 @@ impl Packet for PacketV1 {
         stream.checked_write_stream_le(&self.base.sequence_id);
 
         let header = &stream.get_slice()[2..14];
-        let signature = self
-            .calculate_signature(
-                header,
-                context.client_connection_signature(),
-                &options,
-                context,
-            )
-            .expect("Signature could not be calculated");
+        let signature = Self::calculate_signature(
+            header,
+            &self.base.payload,
+            context.client_connection_signature(),
+            &options,
+            context,
+        )
+        .expect("Signature could not be calculated");
 
         stream.checked_write_stream_bytes(&signature);
 
@@ -251,8 +251,9 @@ impl PacketV1 {
         }
 
         let header = &data[2..14];
-        let calculated_signature = self.calculate_signature(
+        let calculated_signature = Self::calculate_signature(
             header,
+            &self.base.payload,
             context.server_connection_signature(),
             &options,
             context,
@@ -338,8 +339,8 @@ impl PacketV1 {
     }
 
     pub fn calculate_signature(
-        &self,
         header: &[u8],
+        payload: &[u8],
         connection_signature: &[u8],
         options: &[u8],
         context: &SignatureContext,
@@ -348,7 +349,6 @@ impl PacketV1 {
             return Err("Header is too small");
         }
 
-        let payload = &self.base.payload;
         let key = context.signature_key();
         let signature_base = context.signature_base();
 

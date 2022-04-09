@@ -10,11 +10,11 @@ impl NullData {
 }
 
 impl EndianRead for NullData {
-    fn try_read_le(bytes: &[u8]) -> Result<ReadOutput<Self>, Error> {
+    fn try_read_le(_bytes: &[u8]) -> Result<ReadOutput<Self>, Error> {
         Ok(ReadOutput::new(Self, 0))
     }
 
-    fn try_read_be(bytes: &[u8]) -> Result<ReadOutput<Self>, Error> {
+    fn try_read_be(_bytes: &[u8]) -> Result<ReadOutput<Self>, Error> {
         unimplemented!()
     }
 }

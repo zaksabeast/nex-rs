@@ -23,8 +23,8 @@ impl NexVariant {
     pub fn get_type_value(&self) -> u8 {
         match &self {
             NexVariant::Null => 0,
-            NexVariant::Int64(i) => 1,
-            NexVariant::Float64(f) => 2,
+            NexVariant::Int64(_) => 1,
+            NexVariant::Float64(_) => 2,
             NexVariant::Bool(_) => 3,
             NexVariant::String(_) => 4,
             NexVariant::DateTime(_) => 5,
@@ -49,7 +49,7 @@ impl EndianRead for NexVariant {
         Ok(ReadOutput::new(data, stream.get_index()))
     }
 
-    fn try_read_be(bytes: &[u8]) -> Result<ReadOutput<Self>, Error> {
+    fn try_read_be(_bytes: &[u8]) -> Result<ReadOutput<Self>, Error> {
         unimplemented!()
     }
 }
@@ -83,7 +83,7 @@ impl EndianWrite for NexVariant {
         Ok(stream.get_index())
     }
 
-    fn try_write_be(&self, dst: &mut [u8]) -> Result<usize, Error> {
+    fn try_write_be(&self, _dst: &mut [u8]) -> Result<usize, Error> {
         unimplemented!()
     }
 }

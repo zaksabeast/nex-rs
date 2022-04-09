@@ -21,7 +21,7 @@ impl EndianRead for NexQBuffer {
         Ok(ReadOutput::new(NexQBuffer(bytes), stream.get_index()))
     }
 
-    fn try_read_be(bytes: &[u8]) -> Result<ReadOutput<Self>, Error> {
+    fn try_read_be(_bytes: &[u8]) -> Result<ReadOutput<Self>, Error> {
         unimplemented!()
     }
 }
@@ -42,7 +42,7 @@ impl EndianWrite for NexQBuffer {
         Ok(stream.get_index())
     }
 
-    fn try_write_be(&self, dst: &mut [u8]) -> Result<usize, Error> {
+    fn try_write_be(&self, _dst: &mut [u8]) -> Result<usize, Error> {
         unimplemented!()
     }
 }

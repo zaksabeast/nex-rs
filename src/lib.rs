@@ -1,6 +1,3 @@
-// Temporarily allow dead code while building
-#![allow(dead_code)]
-
 pub mod client;
 mod compression;
 pub mod counter;

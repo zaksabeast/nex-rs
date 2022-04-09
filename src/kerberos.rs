@@ -65,21 +65,21 @@ pub fn derive_kerberos_key(principal_id: u32, password: &[u8]) -> [u8; 16] {
     key
 }
 
-struct Ticket {
-    session_key: Vec<u8>,
-    server_pid: u32,
-    ticket_data: Vec<u8>,
+pub struct Ticket {
+    pub session_key: Vec<u8>,
+    pub server_pid: u32,
+    pub ticket_data: Vec<u8>,
 }
 
-struct TicketData {
-    ticket_key: Vec<u8>,
-    ticket_info: Vec<u8>,
+pub struct TicketData {
+    pub ticket_key: Vec<u8>,
+    pub ticket_info: Vec<u8>,
 }
 
-struct TicketInfo {
-    datetime: u64,
-    user_pid: u32,
-    session_key: Vec<u8>,
+pub struct TicketInfo {
+    pub datetime: u64,
+    pub user_pid: u32,
+    pub session_key: Vec<u8>,
 }
 
 #[cfg(test)]

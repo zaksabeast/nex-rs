@@ -93,11 +93,8 @@ impl Default for ClientContext {
 #[derive(Clone)]
 pub struct ClientConnection {
     address: SocketAddr,
-    secure_key: Vec<u8>,
     session_id: u8,
     pid: u32,
-    local_station_url: String,
-    connection_id: u32,
     is_connected: bool,
     kick_timer: Option<u32>,
     context: ClientContext,
@@ -107,11 +104,8 @@ impl ClientConnection {
     pub fn new(address: SocketAddr, context: ClientContext) -> Self {
         Self {
             address,
-            secure_key: vec![],
             session_id: 0,
             pid: 0,
-            local_station_url: "".to_string(),
-            connection_id: 0,
             is_connected: false,
             kick_timer: None,
             context,

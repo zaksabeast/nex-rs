@@ -60,11 +60,7 @@ pub struct ServerSettings {
     use_packet_compression: bool,
     #[getset(set = "pub")]
     ping_timeout: u32,
-    signature_version: u32,
     checksum_version: u32,
-    kerberos_key_size: u32,
-    kerberos_key_derivation: u32,
-    server_version: u32,
 }
 
 impl ServerSettings {
@@ -78,16 +74,12 @@ impl Default for ServerSettings {
         Self {
             access_key: "".to_string(),
             nex_version: 0,
-            server_version: 0,
             use_packet_compression: false,
             prudp_version: 1,
             fragment_size: 1300,
             ping_timeout: 5,
-            signature_version: 0,
             flags_version: 1,
             checksum_version: 1,
-            kerberos_key_size: 32,
-            kerberos_key_derivation: 0,
         }
     }
 }
@@ -102,7 +94,7 @@ pub struct BaseServer {
 }
 
 impl BaseServer {
-    fn new(settings: ServerSettings) -> Self {
+    pub fn new(settings: ServerSettings) -> Self {
         Self {
             settings,
             socket: None,

@@ -25,6 +25,8 @@ pub struct ClientContext {
     cipher: Rc4,
     decipher: Rc4,
     prudp_version: u32,
+    sequence_id_in: Counter,
+    sequence_id_out: Counter,
 }
 
 impl ClientContext {
@@ -36,9 +38,7 @@ impl ClientContext {
             signature_base: access_key.as_bytes().iter().map(|byte| *byte as u32).sum(),
             cipher: Rc4::new(&[0]),
             decipher: Rc4::new(&[0]),
-            server_connection_signature: vec![],
-            client_connection_signature: vec![],
-            session_key: vec![],
+            ..Default::default()
         }
     }
 
@@ -48,6 +48,27 @@ impl ClientContext {
 
     pub fn decrypt(&mut self, data: &[u8]) -> Result<Vec<u8>, &'static str> {
         self.decipher.decrypt(data)
+    }
+
+    pub fn get_sequence_id_in(&mut self) -> u16 {
+        self.sequence_id_in
+            .value()
+            .try_into()
+            .expect("Sequence id out does not fit into u16")
+    }
+
+    pub fn increment_sequence_id_in(&mut self) -> u16 {
+        self.sequence_id_in
+            .increment()
+            .try_into()
+            .expect("Sequence id out does not fit into u16")
+    }
+
+    pub fn increment_sequence_id_out(&mut self) -> u16 {
+        self.sequence_id_out
+            .increment()
+            .try_into()
+            .expect("Sequence id out does not fit into u16")
     }
 }
 
@@ -63,6 +84,8 @@ impl Default for ClientContext {
             signature_key: [0; 16],
             signature_base: 0,
             session_key: vec![],
+            sequence_id_in: Counter::default(),
+            sequence_id_out: Counter::default(),
         }
     }
 }
@@ -76,8 +99,6 @@ pub struct ClientConnection {
     local_station_url: String,
     connection_id: u32,
     is_connected: bool,
-    sequence_id_in: Counter,
-    sequence_id_out: Counter,
     kick_timer: Option<u32>,
     context: ClientContext,
 }
@@ -92,8 +113,6 @@ impl ClientConnection {
             local_station_url: "".to_string(),
             connection_id: 0,
             is_connected: false,
-            sequence_id_in: Counter::default(),
-            sequence_id_out: Counter::default(),
             kick_timer: None,
             context,
         }
@@ -166,8 +185,8 @@ impl ClientConnection {
     }
 
     pub fn reset(&mut self) {
-        self.sequence_id_in = Counter::default();
-        self.sequence_id_out = Counter::default();
+        self.context.sequence_id_in = Counter::default();
+        self.context.sequence_id_out = Counter::default();
 
         self.update_rc4_key(b"CD&ML");
 
@@ -198,11 +217,16 @@ impl ClientConnection {
         &mut self.context
     }
 
+    pub fn get_sequence_id_in(&mut self) -> u16 {
+        self.context.get_sequence_id_in()
+    }
+
+    pub fn increment_sequence_id_in(&mut self) -> u16 {
+        self.context.increment_sequence_id_in()
+    }
+
     pub fn increment_sequence_id_out(&mut self) -> u16 {
-        self.sequence_id_out
-            .increment()
-            .try_into()
-            .expect("Sequence id out does not fit into u16")
+        self.context.increment_sequence_id_out()
     }
 
     pub fn update_rc4_key(&mut self, rc4_key: &[u8]) {

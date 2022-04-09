@@ -243,6 +243,12 @@ pub trait Server: EventHandler {
 
         let packet_type = packet.get_packet_type();
 
+        if packet_type != PacketType::Ping && packet.get_sequence_id() < client.get_sequence_id_in()
+        {
+            // Ignore packets we've already handled
+            return Ok(());
+        }
+
         match packet_type {
             PacketType::Syn => {
                 client.reset();
@@ -286,6 +292,11 @@ pub trait Server: EventHandler {
                 self.on_ping(client, &packet).await?;
             }
         };
+
+        // Pings have their own sequence ids
+        if packet_type != PacketType::Ping {
+            client.increment_sequence_id_in();
+        }
 
         if packet_type == PacketType::Disconnect {
             let addr = client.get_address();

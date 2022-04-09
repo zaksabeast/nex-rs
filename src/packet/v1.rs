@@ -249,7 +249,11 @@ impl PacketV1 {
         if payload_size > 0 {
             self.base.payload = stream.default_read_byte_stream(payload_size);
 
-            if self.base.packet_type == PacketType::Data && !self.base.flags.multi_ack() {
+            if self.base.packet_type == PacketType::Data
+                && !self.base.flags.multi_ack()
+                // Only decode if it's the current packet
+                && self.base.sequence_id == context.get_sequence_id_in()
+            {
                 let out: Vec<u8> = context.decrypt(&self.base.payload)?;
                 self.base.rmc_request = out
                     .read_le(0)

@@ -220,6 +220,10 @@ impl ClientConnection {
         self.context.signature_context.server_connection_signature()
     }
 
+    pub fn is_connected(&mut self) -> bool {
+        self.is_connected
+    }
+
     pub fn set_is_connected(&mut self, is_connected: bool) {
         self.is_connected = is_connected;
     }

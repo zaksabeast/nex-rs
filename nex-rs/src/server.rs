@@ -233,6 +233,11 @@ pub trait Server: EventHandler {
 
         let packet = client.read_packet(buf)?;
 
+        if !client.is_connected() && packet.get_packet_type() != PacketType::Syn {
+            // Ignore packets from disconnected clients
+            return Ok(());
+        }
+
         client.set_kick_timer(Some(base.settings.ping_timeout));
 
         let flags = packet.get_flags();

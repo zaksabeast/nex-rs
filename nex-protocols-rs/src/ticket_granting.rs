@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use nex_rs::client::ClientConnection;
 use nex_rs::nex_types::{DataHolder, NexString, ResultCode};
-use nex_rs::packet::{Packet, PacketV1};
+use nex_rs::rmc::RMCRequest;
 use nex_rs::server::Server;
 use no_std_io::{EndianRead, EndianWrite, StreamContainer, StreamReader};
 use num_enum::{IntoPrimitive, TryFromPrimitive};
@@ -67,10 +67,9 @@ pub trait TicketGrantingProtocol: Server {
     async fn handle_login(
         &self,
         client: &mut ClientConnection,
-        packet: &PacketV1,
+        request: &RMCRequest,
     ) -> Result<(), &'static str> {
-        let rmc_request = packet.get_rmc_request();
-        let parameters = rmc_request.parameters.as_slice();
+        let parameters = request.parameters.as_slice();
         let mut parameters_stream = StreamContainer::new(parameters);
 
         let username: String = parameters_stream
@@ -86,9 +85,9 @@ pub trait TicketGrantingProtocol: Server {
             Ok(data) => {
                 self.send_success(
                     client,
-                    rmc_request.protocol_id,
-                    rmc_request.method_id,
-                    rmc_request.call_id,
+                    request.protocol_id,
+                    request.method_id,
+                    request.call_id,
                     data,
                 )
                 .await?
@@ -96,9 +95,9 @@ pub trait TicketGrantingProtocol: Server {
             Err(error_code) => {
                 self.send_error(
                     client,
-                    rmc_request.protocol_id,
-                    rmc_request.method_id,
-                    rmc_request.call_id,
+                    request.protocol_id,
+                    request.method_id,
+                    request.call_id,
                     error_code.into(),
                 )
                 .await?
@@ -110,10 +109,9 @@ pub trait TicketGrantingProtocol: Server {
     async fn handle_login_ex(
         &self,
         client: &mut ClientConnection,
-        packet: &PacketV1,
+        request: &RMCRequest,
     ) -> Result<(), &'static str> {
-        let rmc_request = packet.get_rmc_request();
-        let parameters = rmc_request.parameters.as_slice();
+        let parameters = request.parameters.as_slice();
         let mut parameters_stream = StreamContainer::new(parameters);
 
         let username: String = parameters_stream
@@ -142,9 +140,9 @@ pub trait TicketGrantingProtocol: Server {
             Ok(data) => {
                 self.send_success(
                     client,
-                    rmc_request.protocol_id,
-                    rmc_request.method_id,
-                    rmc_request.call_id,
+                    request.protocol_id,
+                    request.method_id,
+                    request.call_id,
                     data,
                 )
                 .await?
@@ -152,9 +150,9 @@ pub trait TicketGrantingProtocol: Server {
             Err(error_code) => {
                 self.send_error(
                     client,
-                    rmc_request.protocol_id,
-                    rmc_request.method_id,
-                    rmc_request.call_id,
+                    request.protocol_id,
+                    request.method_id,
+                    request.call_id,
                     error_code.into(),
                 )
                 .await?
@@ -166,10 +164,9 @@ pub trait TicketGrantingProtocol: Server {
     async fn handle_request_ticket(
         &self,
         client: &mut ClientConnection,
-        packet: &PacketV1,
+        request: &RMCRequest,
     ) -> Result<(), &'static str> {
-        let rmc_request = packet.get_rmc_request();
-        let parameters = rmc_request.parameters.as_slice();
+        let parameters = request.parameters.as_slice();
         if parameters.len() != 8 {
             return Err("[TicketGrantingProtocol::request_ticket] Parameters length not 8");
         }
@@ -187,9 +184,9 @@ pub trait TicketGrantingProtocol: Server {
             Ok(data) => {
                 self.send_success(
                     client,
-                    rmc_request.protocol_id,
-                    rmc_request.method_id,
-                    rmc_request.call_id,
+                    request.protocol_id,
+                    request.method_id,
+                    request.call_id,
                     data,
                 )
                 .await?
@@ -197,9 +194,9 @@ pub trait TicketGrantingProtocol: Server {
             Err(error_code) => {
                 self.send_error(
                     client,
-                    rmc_request.protocol_id,
-                    rmc_request.method_id,
-                    rmc_request.call_id,
+                    request.protocol_id,
+                    request.method_id,
+                    request.call_id,
                     error_code.into(),
                 )
                 .await?
@@ -211,10 +208,9 @@ pub trait TicketGrantingProtocol: Server {
     async fn handle_get_pid(
         &self,
         client: &mut ClientConnection,
-        packet: &PacketV1,
+        request: &RMCRequest,
     ) -> Result<(), &'static str> {
-        let rmc_request = packet.get_rmc_request();
-        let parameters = rmc_request.parameters.as_slice();
+        let parameters = request.parameters.as_slice();
         let mut parameters_stream = StreamContainer::new(parameters);
         let username: String = parameters_stream
             .read_stream_le::<NexString>()
@@ -229,9 +225,9 @@ pub trait TicketGrantingProtocol: Server {
             Ok(data) => {
                 self.send_success(
                     client,
-                    rmc_request.protocol_id,
-                    rmc_request.method_id,
-                    rmc_request.call_id,
+                    request.protocol_id,
+                    request.method_id,
+                    request.call_id,
                     data,
                 )
                 .await?
@@ -239,9 +235,9 @@ pub trait TicketGrantingProtocol: Server {
             Err(error_code) => {
                 self.send_error(
                     client,
-                    rmc_request.protocol_id,
-                    rmc_request.method_id,
-                    rmc_request.call_id,
+                    request.protocol_id,
+                    request.method_id,
+                    request.call_id,
                     error_code.into(),
                 )
                 .await?
@@ -253,10 +249,9 @@ pub trait TicketGrantingProtocol: Server {
     async fn handle_get_name(
         &self,
         client: &mut ClientConnection,
-        packet: &PacketV1,
+        request: &RMCRequest,
     ) -> Result<(), &'static str> {
-        let rmc_request = packet.get_rmc_request();
-        let parameters = rmc_request.parameters.as_slice();
+        let parameters = request.parameters.as_slice();
 
         if parameters.len() != 4 {
             return Err("[TicketGrantingProtocol::get_name] Parameters length not 4");
@@ -272,9 +267,9 @@ pub trait TicketGrantingProtocol: Server {
             Ok(data) => {
                 self.send_success(
                     client,
-                    rmc_request.protocol_id,
-                    rmc_request.method_id,
-                    rmc_request.call_id,
+                    request.protocol_id,
+                    request.method_id,
+                    request.call_id,
                     data,
                 )
                 .await?
@@ -282,9 +277,9 @@ pub trait TicketGrantingProtocol: Server {
             Err(error_code) => {
                 self.send_error(
                     client,
-                    rmc_request.protocol_id,
-                    rmc_request.method_id,
-                    rmc_request.call_id,
+                    request.protocol_id,
+                    request.method_id,
+                    request.call_id,
                     error_code.into(),
                 )
                 .await?

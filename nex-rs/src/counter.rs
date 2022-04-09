@@ -13,7 +13,7 @@ impl Counter {
         self.counter
     }
 
-    pub fn value(&mut self) -> u32 {
+    pub fn value(&self) -> u32 {
         self.counter
     }
 }

@@ -8,7 +8,7 @@ use crate::datastore_usum::{
 use async_trait::async_trait;
 use nex_rs::client::ClientConnection;
 use nex_rs::nex_types::{NexList, NexStruct, ResultCode};
-use nex_rs::packet::{Packet, PacketV1};
+use nex_rs::rmc::RMCRequest;
 use nex_rs::server::Server;
 use no_std_io::{StreamContainer, StreamReader};
 use num_enum::{IntoPrimitive, TryFromPrimitive};
@@ -100,9 +100,8 @@ pub trait DataStoreProtocol: Server {
     async fn handle_get_metas(
         &self,
         client: &mut ClientConnection,
-        packet: &PacketV1,
+        request: &RMCRequest,
     ) -> Result<(), &'static str> {
-        let request = packet.get_rmc_request();
         let parameters = request.parameters.as_slice();
 
         let mut parameters_stream = StreamContainer::new(parameters);
@@ -142,9 +141,8 @@ pub trait DataStoreProtocol: Server {
     async fn handle_rate_object(
         &self,
         client: &mut ClientConnection,
-        packet: &PacketV1,
+        request: &RMCRequest,
     ) -> Result<(), &'static str> {
-        let request = packet.get_rmc_request();
         let parameters = request.parameters.as_slice();
 
         let mut parameters_stream = StreamContainer::new(parameters);
@@ -187,9 +185,8 @@ pub trait DataStoreProtocol: Server {
     async fn handle_post_meta_binary(
         &self,
         client: &mut ClientConnection,
-        packet: &PacketV1,
+        request: &RMCRequest,
     ) -> Result<(), &'static str> {
-        let request = packet.get_rmc_request();
         let parameters = request.parameters.as_slice();
 
         let mut parameters_stream = StreamContainer::new(parameters);
@@ -226,9 +223,8 @@ pub trait DataStoreProtocol: Server {
     async fn handle_change_metas(
         &self,
         client: &mut ClientConnection,
-        packet: &PacketV1,
+        request: &RMCRequest,
     ) -> Result<(), &'static str> {
-        let request = packet.get_rmc_request();
         let parameters = request.parameters.as_slice();
 
         let mut parameters_stream = StreamContainer::new(parameters);
@@ -265,9 +261,8 @@ pub trait DataStoreProtocol: Server {
     async fn handle_prepare_upload_pokemon(
         &self,
         client: &mut ClientConnection,
-        packet: &PacketV1,
+        request: &RMCRequest,
     ) -> Result<(), &'static str> {
-        let request = packet.get_rmc_request();
         match self.prepare_upload_pokemon(client).await {
             Ok(data) => {
                 self.send_success(
@@ -296,9 +291,8 @@ pub trait DataStoreProtocol: Server {
     async fn handle_upload_pokemon(
         &self,
         client: &mut ClientConnection,
-        packet: &PacketV1,
+        request: &RMCRequest,
     ) -> Result<(), &'static str> {
-        let request = packet.get_rmc_request();
         let parameters = request.parameters.as_slice();
 
         let mut parameters_stream = StreamContainer::new(parameters);
@@ -335,9 +329,8 @@ pub trait DataStoreProtocol: Server {
     async fn handle_prepare_trade_pokemon(
         &self,
         client: &mut ClientConnection,
-        packet: &PacketV1,
+        request: &RMCRequest,
     ) -> Result<(), &'static str> {
-        let request = packet.get_rmc_request();
         let parameters = request.parameters.as_slice();
 
         let mut parameters_stream = StreamContainer::new(parameters);
@@ -374,9 +367,8 @@ pub trait DataStoreProtocol: Server {
     async fn handle_trade_pokemon(
         &self,
         client: &mut ClientConnection,
-        packet: &PacketV1,
+        request: &RMCRequest,
     ) -> Result<(), &'static str> {
-        let request = packet.get_rmc_request();
         let parameters = request.parameters.as_slice();
 
         let mut parameters_stream = StreamContainer::new(parameters);
@@ -413,9 +405,8 @@ pub trait DataStoreProtocol: Server {
     async fn handle_download_other_pokemon(
         &self,
         client: &mut ClientConnection,
-        packet: &PacketV1,
+        request: &RMCRequest,
     ) -> Result<(), &'static str> {
-        let request = packet.get_rmc_request();
         let parameters = request.parameters.as_slice();
 
         let mut parameters_stream = StreamContainer::new(parameters);
@@ -452,9 +443,8 @@ pub trait DataStoreProtocol: Server {
     async fn handle_download_my_pokemon(
         &self,
         client: &mut ClientConnection,
-        packet: &PacketV1,
+        request: &RMCRequest,
     ) -> Result<(), &'static str> {
-        let request = packet.get_rmc_request();
         let parameters = request.parameters.as_slice();
 
         let mut parameters_stream = StreamContainer::new(parameters);
@@ -491,9 +481,8 @@ pub trait DataStoreProtocol: Server {
     async fn handle_delete_pokemon(
         &self,
         client: &mut ClientConnection,
-        packet: &PacketV1,
+        request: &RMCRequest,
     ) -> Result<(), &'static str> {
-        let request = packet.get_rmc_request();
         let parameters = request.parameters.as_slice();
 
         let mut parameters_stream = StreamContainer::new(parameters);
@@ -530,9 +519,8 @@ pub trait DataStoreProtocol: Server {
     async fn handle_search_pokemon_v2(
         &self,
         client: &mut ClientConnection,
-        packet: &PacketV1,
+        request: &RMCRequest,
     ) -> Result<(), &'static str> {
-        let request = packet.get_rmc_request();
         let parameters = request.parameters.as_slice();
 
         let mut parameters_stream = StreamContainer::new(parameters);

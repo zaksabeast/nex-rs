@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use nex_rs::client::ClientConnection;
 use nex_rs::nex_types::{DataHolder, NexList, NexQBuffer, NexString, ResultCode};
-use nex_rs::packet::{Packet, PacketV1};
+use nex_rs::rmc::RMCRequest;
 use nex_rs::server::Server;
 use no_std_io::{StreamContainer, StreamReader};
 use num_enum::{IntoPrimitive, TryFromPrimitive};
@@ -68,9 +68,8 @@ pub trait SecureConnectionProtocol: Server {
     async fn handle_register(
         &self,
         client: &mut ClientConnection,
-        packet: &PacketV1,
+        request: &RMCRequest,
     ) -> Result<(), &'static str> {
-        let request = packet.get_rmc_request();
         let parameters = request.parameters.as_slice();
         let mut parameters_stream = StreamContainer::new(parameters);
 
@@ -106,9 +105,8 @@ pub trait SecureConnectionProtocol: Server {
     async fn handle_request_connection_data(
         &self,
         client: &mut ClientConnection,
-        packet: &PacketV1,
+        request: &RMCRequest,
     ) -> Result<(), &'static str> {
-        let request = packet.get_rmc_request();
         let parameters = request.parameters.as_slice();
         let mut parameters_stream = StreamContainer::new(parameters);
 
@@ -151,9 +149,8 @@ pub trait SecureConnectionProtocol: Server {
     async fn handle_request_urls(
         &self,
         client: &mut ClientConnection,
-        packet: &PacketV1,
+        request: &RMCRequest,
     ) -> Result<(), &'static str> {
-        let request = packet.get_rmc_request();
         let parameters = request.parameters.as_slice();
         let mut parameters_stream = StreamContainer::new(parameters);
 
@@ -193,9 +190,8 @@ pub trait SecureConnectionProtocol: Server {
     async fn handle_register_ex(
         &self,
         client: &mut ClientConnection,
-        packet: &PacketV1,
+        request: &RMCRequest,
     ) -> Result<(), &'static str> {
-        let request = packet.get_rmc_request();
         let parameters = request.parameters.as_slice();
         let mut parameters_stream = StreamContainer::new(parameters);
 
@@ -235,7 +231,7 @@ pub trait SecureConnectionProtocol: Server {
     async fn handle_test_connectivity(
         &self,
         client: &mut ClientConnection,
-        _packet: &PacketV1,
+        _request: &RMCRequest,
     ) -> Result<(), &'static str> {
         self.test_connectivity(client).await
     }
@@ -243,9 +239,8 @@ pub trait SecureConnectionProtocol: Server {
     async fn handle_update_urls(
         &self,
         client: &mut ClientConnection,
-        packet: &PacketV1,
+        request: &RMCRequest,
     ) -> Result<(), &'static str> {
-        let request = packet.get_rmc_request();
         let parameters = request.parameters.as_slice();
         let mut parameters_stream = StreamContainer::new(parameters);
 
@@ -259,9 +254,8 @@ pub trait SecureConnectionProtocol: Server {
     async fn handle_replace_url(
         &self,
         client: &mut ClientConnection,
-        packet: &PacketV1,
+        request: &RMCRequest,
     ) -> Result<(), &'static str> {
-        let request = packet.get_rmc_request();
         let parameters = request.parameters.as_slice();
         let mut parameters_stream = StreamContainer::new(parameters);
 
@@ -279,9 +273,8 @@ pub trait SecureConnectionProtocol: Server {
     async fn handle_send_report(
         &self,
         client: &mut ClientConnection,
-        packet: &PacketV1,
+        request: &RMCRequest,
     ) -> Result<(), &'static str> {
-        let request = packet.get_rmc_request();
         let parameters = request.parameters.as_slice();
         let mut parameters_stream = StreamContainer::new(parameters);
 

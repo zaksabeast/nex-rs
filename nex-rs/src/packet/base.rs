@@ -1,5 +1,4 @@
 use super::{PacketFlags, PacketType};
-use crate::rmc::RMCRequest;
 
 #[derive(Debug)]
 pub struct BasePacket {
@@ -14,7 +13,6 @@ pub struct BasePacket {
     pub(super) connection_signature: Vec<u8>,
     pub(super) fragment_id: u8,
     pub(super) payload: Vec<u8>,
-    pub(super) rmc_request: RMCRequest,
 }
 
 impl BasePacket {
@@ -40,7 +38,6 @@ impl Default for BasePacket {
             payload: vec![],
             packet_type: PacketType::Connect,
             flags: PacketFlags::new(0),
-            rmc_request: RMCRequest::default(),
         }
     }
 }

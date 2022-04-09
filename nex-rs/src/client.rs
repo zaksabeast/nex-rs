@@ -1,10 +1,11 @@
 use crate::{
     counter::Counter,
-    packet::{Packet, PacketV1},
+    packet::{Packet, PacketType, PacketV1, SignatureContext},
     rc4::Rc4,
-    rmc::RMCResponse,
+    rmc::{RMCRequest, RMCResponse},
 };
 use getset::{CopyGetters, Getters};
+use no_std_io::Reader;
 use std::net::SocketAddr;
 
 #[derive(Clone, CopyGetters, Getters)]
@@ -14,19 +15,12 @@ pub struct ClientContext {
     flags_version: u32,
     #[getset(get_copy = "pub")]
     signature_base: u32,
-    #[getset(get = "pub")]
-    server_connection_signature: Vec<u8>,
-    #[getset(get = "pub")]
-    client_connection_signature: Vec<u8>,
-    #[getset(get = "pub")]
-    signature_key: [u8; 16],
-    #[getset(get = "pub")]
-    session_key: Vec<u8>,
     cipher: Rc4,
     decipher: Rc4,
     prudp_version: u32,
     sequence_id_in: Counter,
     sequence_id_out: Counter,
+    signature_context: SignatureContext,
 }
 
 impl ClientContext {
@@ -34,10 +28,9 @@ impl ClientContext {
         Self {
             flags_version,
             prudp_version,
-            signature_key: crate::md5::hash(access_key.as_bytes()),
-            signature_base: access_key.as_bytes().iter().map(|byte| *byte as u32).sum(),
             cipher: Rc4::new(&[0]),
             decipher: Rc4::new(&[0]),
+            signature_context: SignatureContext::new(access_key),
             ..Default::default()
         }
     }
@@ -50,7 +43,7 @@ impl ClientContext {
         self.decipher.decrypt(data)
     }
 
-    pub fn get_sequence_id_in(&mut self) -> u16 {
+    pub fn get_sequence_id_in(&self) -> u16 {
         self.sequence_id_in
             .value()
             .try_into()
@@ -70,6 +63,50 @@ impl ClientContext {
             .try_into()
             .expect("Sequence id out does not fit into u16")
     }
+
+    fn can_decrypt_packet(&self, packet: &PacketV1) -> Result<(), &'static str> {
+        if packet.get_packet_type() != PacketType::Data {
+            return Err("Only data packets can have payloads");
+        }
+
+        if packet.get_flags().multi_ack() {
+            return Err("Ack packets can not hold payloads");
+        }
+
+        if packet.get_sequence_id() != self.get_sequence_id_in() {
+            return Err("Tried to decode a packet out of order");
+        }
+
+        Ok(())
+    }
+
+    fn decrypt_packet(&mut self, packet: &PacketV1) -> Result<Vec<u8>, &'static str> {
+        self.can_decrypt_packet(packet)?;
+        self.decipher.decrypt(&packet.get_payload())
+    }
+
+    fn can_encrypt_packet(&self, packet: &PacketV1) -> Result<(), &'static str> {
+        if packet.get_packet_type() != PacketType::Data {
+            return Err("Only data packets can have payloads");
+        }
+
+        if packet.get_flags().multi_ack() {
+            return Err("Ack packets can not hold payloads");
+        }
+
+        if packet.get_payload().is_empty() {
+            return Err("Cannot encode an empty payload");
+        }
+
+        Ok(())
+    }
+
+    fn encrypt_packet(&mut self, packet: &mut PacketV1) {
+        if self.can_encrypt_packet(&packet).is_ok() {
+            let payload = self.cipher.encrypt(packet.get_payload()).unwrap();
+            packet.set_payload(payload);
+        }
+    }
 }
 
 impl Default for ClientContext {
@@ -79,13 +116,10 @@ impl Default for ClientContext {
             decipher: Rc4::new(&[0]),
             flags_version: 1,
             prudp_version: 1,
-            server_connection_signature: vec![],
-            client_connection_signature: vec![],
-            signature_key: [0; 16],
             signature_base: 0,
-            session_key: vec![],
             sequence_id_in: Counter::default(),
             sequence_id_out: Counter::default(),
+            signature_context: SignatureContext::default(),
         }
     }
 }
@@ -113,17 +147,25 @@ impl ClientConnection {
     }
 
     pub fn encode_packet(&mut self, packet: &mut PacketV1) -> Vec<u8> {
-        packet.to_bytes(&mut self.context)
+        self.context.encrypt_packet(packet);
+        packet.to_bytes(self.context.flags_version, &self.context.signature_context)
     }
 
     pub fn read_packet(&mut self, data: Vec<u8>) -> Result<PacketV1, &'static str> {
-        PacketV1::read_packet(&mut self.context, data)
+        PacketV1::read_packet(
+            data,
+            self.context.flags_version,
+            &self.context.signature_context,
+        )
     }
 
     pub fn new_data_packet(&self, payload: Vec<u8>) -> PacketV1 {
         PacketV1::new_data_packet(
             self.session_id,
-            self.context.client_connection_signature.to_vec(),
+            self.context
+                .signature_context
+                .client_connection_signature()
+                .to_vec(),
             payload,
         )
     }
@@ -155,23 +197,27 @@ impl ClientConnection {
     }
 
     pub fn set_session_key(&mut self, key: Vec<u8>) {
-        self.context.session_key = key;
+        self.context.signature_context.set_session_key(key);
     }
 
     pub fn set_client_connection_signature(&mut self, client_connection_signature: Vec<u8>) {
-        self.context.client_connection_signature = client_connection_signature;
+        self.context
+            .signature_context
+            .set_client_connection_signature(client_connection_signature);
     }
 
     pub fn get_client_connection_signature(&mut self) -> &[u8] {
-        &self.context.client_connection_signature
+        self.context.signature_context.client_connection_signature()
     }
 
     pub fn set_server_connection_signature(&mut self, server_connection_signature: Vec<u8>) {
-        self.context.server_connection_signature = server_connection_signature;
+        self.context
+            .signature_context
+            .set_server_connection_signature(server_connection_signature);
     }
 
     pub fn get_server_connection_signature(&mut self) -> &[u8] {
-        &self.context.server_connection_signature
+        self.context.signature_context.server_connection_signature()
     }
 
     pub fn set_is_connected(&mut self, is_connected: bool) {
@@ -234,5 +280,16 @@ impl ClientConnection {
 
     pub fn set_kick_timer(&mut self, seconds: Option<u32>) {
         self.kick_timer = seconds;
+    }
+
+    pub fn can_decode_rmc_request(&self, packet: &PacketV1) -> bool {
+        self.context.can_decrypt_packet(packet).is_ok()
+    }
+
+    pub fn decode_rmc_request(&mut self, packet: &PacketV1) -> Result<RMCRequest, &'static str> {
+        let payload = self.context.decrypt_packet(packet)?;
+        payload
+            .read_le(0)
+            .map_err(|_| "Cannot read rmc request from payload")
     }
 }

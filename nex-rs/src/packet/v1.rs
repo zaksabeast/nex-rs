@@ -1,5 +1,6 @@
-use super::{BasePacket, Packet, PacketFlag, PacketFlags, PacketOption, PacketType};
-use crate::client::ClientContext;
+use super::{
+    BasePacket, Packet, PacketFlag, PacketFlags, PacketOption, PacketType, SignatureContext,
+};
 use hmac::{Hmac, Mac};
 use md5::Md5;
 use no_std_io::{Cursor, Reader, StreamContainer, StreamReader, StreamWriter};
@@ -25,23 +26,14 @@ impl Packet for PacketV1 {
         &mut self.base
     }
 
-    fn to_bytes(self: &mut PacketV1, context: &mut ClientContext) -> Vec<u8> {
+    fn to_bytes(self: &mut PacketV1, flags_version: u32, context: &SignatureContext) -> Vec<u8> {
         if self.base.packet_type == PacketType::Data {
-            if !self.base.flags.multi_ack() {
-                let payload_len = self.base.payload.len();
-
-                if payload_len > 0 {
-                    self.base.payload =
-                        context.encrypt(&self.base.payload).expect("Encrypt failed");
-                }
-            }
-
             if !self.base.flags.has_size() {
                 self.base.flags |= PacketFlag::HasSize;
             }
         }
 
-        let type_flags: u16 = if context.flags_version() == 0 {
+        let type_flags: u16 = if flags_version == 0 {
             u16::from(self.base.packet_type) | u16::from(self.base.flags) << 3
         } else {
             u16::from(self.base.packet_type) | u16::from(self.base.flags) << 4
@@ -147,7 +139,11 @@ impl PacketV1 {
         }
     }
 
-    pub fn read_packet(context: &mut ClientContext, data: Vec<u8>) -> Result<Self, &'static str> {
+    pub fn read_packet(
+        data: Vec<u8>,
+        flags_version: u32,
+        context: &SignatureContext,
+    ) -> Result<Self, &'static str> {
         let data_len = data.len();
 
         let mut packet = Self {
@@ -156,7 +152,7 @@ impl PacketV1 {
         };
 
         if data_len > 0 {
-            packet.decode(context)?;
+            packet.decode(flags_version, context)?;
         }
 
         Ok(packet)
@@ -190,7 +186,11 @@ impl PacketV1 {
         self.maximum_substream_id = value;
     }
 
-    fn decode(&mut self, context: &mut ClientContext) -> Result<(), &'static str> {
+    fn decode(
+        &mut self,
+        flags_version: u32,
+        context: &SignatureContext,
+    ) -> Result<(), &'static str> {
         let data_len = self.base.data.len();
         let data = self.base.data.clone();
 
@@ -222,7 +222,7 @@ impl PacketV1 {
         let packet_type;
         let flags;
 
-        if context.flags_version() == 0 {
+        if flags_version == 0 {
             packet_type = type_flags & 0x7;
             flags = type_flags >> 0x3;
         } else {
@@ -248,17 +248,6 @@ impl PacketV1 {
 
         if payload_size > 0 {
             self.base.payload = stream.default_read_byte_stream(payload_size);
-
-            if self.base.packet_type == PacketType::Data
-                && !self.base.flags.multi_ack()
-                // Only decode if it's the current packet
-                && self.base.sequence_id == context.get_sequence_id_in()
-            {
-                let out: Vec<u8> = context.decrypt(&self.base.payload)?;
-                self.base.rmc_request = out
-                    .read_le(0)
-                    .map_err(|_| "RMC Request could not be parsed")?;
-            }
         }
 
         let header = &data[2..14];
@@ -353,7 +342,7 @@ impl PacketV1 {
         header: &[u8],
         connection_signature: &[u8],
         options: &[u8],
-        context: &ClientContext,
+        context: &SignatureContext,
     ) -> Result<Vec<u8>, &'static str> {
         if header.len() < 8 {
             return Err("Header is too small");
@@ -388,10 +377,11 @@ mod test {
     #[test]
     fn should_encode_and_decode() {
         let bytes = BASE_PACKET.to_vec();
-        let mut context = ClientContext::default();
-        let mut packet =
-            PacketV1::read_packet(&mut context, bytes.clone()).expect("Should have succeeded!");
-        let result = packet.to_bytes(&mut context);
+        let flags_version = 1;
+        let context = SignatureContext::default();
+        let mut packet = PacketV1::read_packet(bytes.clone(), flags_version, &context)
+            .expect("Should have succeeded!");
+        let result = packet.to_bytes(flags_version, &context);
         assert_eq!(result, bytes);
     }
 
@@ -408,9 +398,10 @@ mod test {
                 0x01,
             ];
 
-            let mut context = ClientContext::default();
-            let packet =
-                PacketV1::read_packet(&mut context, bytes).expect("Should have succeeded!");
+            let flags_version = 1;
+            let context = SignatureContext::default();
+            let packet = PacketV1::read_packet(bytes, flags_version, &context)
+                .expect("Should have succeeded!");
 
             assert_eq!(packet.base.packet_type, PacketType::Syn);
             assert_eq!(packet.base.flags.needs_ack(), true);
@@ -422,9 +413,10 @@ mod test {
         #[test]
         fn should_encode_packet() {
             let bytes = BASE_PACKET.to_vec();
-            let mut context = ClientContext::default();
-            let mut packet =
-                PacketV1::read_packet(&mut context, bytes).expect("Should have succeeded!");
+            let flags_version = 1;
+            let context = SignatureContext::default();
+            let mut packet = PacketV1::read_packet(bytes, flags_version, &context)
+                .expect("Should have succeeded!");
 
             packet.base.packet_type = PacketType::Syn;
             packet.base.flags.clear_flags();
@@ -433,7 +425,7 @@ mod test {
             packet.supported_functions = 4;
             packet.maximum_substream_id = 1;
 
-            let result: Vec<u8> = packet.to_bytes(&mut context);
+            let result: Vec<u8> = packet.to_bytes(flags_version, &context);
             let expected_result = vec![
                 0xea, 0xd0, 0x01, 0x1b, 0x00, 0x00, 0x00, 0x00, 0xc0, 0x00, 0x00, 0x00, 0x00, 0x00,
                 0xd3, 0x7f, 0xf5, 0x70, 0x42, 0x0b, 0xba, 0xbf, 0xa3, 0xb6, 0xc3, 0x47, 0x5e, 0x14,
@@ -458,9 +450,10 @@ mod test {
                 0xcd, 0xab, 0x04, 0x01, 0x00, 0xaa,
             ];
 
-            let mut context = ClientContext::default();
-            let packet =
-                PacketV1::read_packet(&mut context, bytes).expect("Should have succeeded!");
+            let flags_version = 1;
+            let context = SignatureContext::default();
+            let packet = PacketV1::read_packet(bytes, flags_version, &context)
+                .expect("Should have succeeded!");
 
             assert_eq!(packet.base.packet_type, PacketType::Connect);
             assert_eq!(packet.base.flags.reliable(), true);
@@ -476,9 +469,10 @@ mod test {
         #[test]
         fn should_encode_packet() {
             let bytes = BASE_PACKET.to_vec();
-            let mut context = ClientContext::default();
-            let mut packet =
-                PacketV1::read_packet(&mut context, bytes).expect("Should have succeeded!");
+            let flags_version = 1;
+            let context = SignatureContext::default();
+            let mut packet = PacketV1::read_packet(bytes, flags_version, &context)
+                .expect("Should have succeeded!");
 
             packet.base.packet_type = PacketType::Connect;
             packet.base.flags.clear_flags();
@@ -491,7 +485,7 @@ mod test {
             packet.base.payload = vec![0xaa];
             packet.base.session_id = 1;
 
-            let result: Vec<u8> = packet.to_bytes(&mut context);
+            let result: Vec<u8> = packet.to_bytes(flags_version, &context);
             let expected_result = vec![
                 0xea, 0xd0, 0x01, 0x1f, 0x01, 0x00, 0x00, 0x00, 0xe1, 0x00, 0x01, 0x00, 0x00, 0x00,
                 0x15, 0xab, 0x64, 0x8a, 0xc2, 0xea, 0xcd, 0xa7, 0x25, 0x20, 0x19, 0x6f, 0x58, 0x0e,
@@ -515,9 +509,10 @@ mod test {
                 0x04, 0x1c, 0x65, 0x55, 0x6d, 0x91, 0x6e, 0xc4,
             ];
 
-            let mut context = ClientContext::default();
-            let packet =
-                PacketV1::read_packet(&mut context, bytes).expect("Should have succeeded!");
+            let flags_version = 1;
+            let context = SignatureContext::default();
+            let packet = PacketV1::read_packet(bytes, flags_version, &context)
+                .expect("Should have succeeded!");
 
             assert_eq!(packet.base.packet_type, PacketType::Data);
             assert_eq!(packet.base.flags.reliable(), true);
@@ -537,9 +532,10 @@ mod test {
         #[test]
         fn should_encode_packet() {
             let bytes = BASE_PACKET.to_vec();
-            let mut context = ClientContext::default();
-            let mut packet =
-                PacketV1::read_packet(&mut context, bytes).expect("Should have succeeded!");
+            let flags_version = 1;
+            let context = SignatureContext::default();
+            let mut packet = PacketV1::read_packet(bytes, flags_version, &context)
+                .expect("Should have succeeded!");
 
             packet.base.packet_type = PacketType::Data;
             packet.base.flags.clear_flags();
@@ -553,12 +549,12 @@ mod test {
                 0x03, 0x03, 0x03,
             ];
 
-            let result: Vec<u8> = packet.to_bytes(&mut context);
+            let result: Vec<u8> = packet.to_bytes(flags_version, &context);
             let expected_result = vec![
                 0xea, 0xd0, 0x01, 0x03, 0x11, 0x00, 0x00, 0x00, 0xe2, 0x00, 0x01, 0x00, 0x00, 0x00,
-                0x41, 0xbd, 0xb8, 0xf8, 0x3f, 0x68, 0xdc, 0x5d, 0x04, 0x67, 0x4a, 0xee, 0x5b, 0xec,
-                0x04, 0x0d, 0x02, 0x01, 0x00, 0xd3, 0x18, 0x89, 0x41, 0x09, 0x36, 0x5c, 0x3b, 0x8b,
-                0x04, 0x1c, 0x65, 0x55, 0x6d, 0x91, 0x6e, 0xc4,
+                0x7a, 0xde, 0xd4, 0xa9, 0xac, 0x49, 0x08, 0xcf, 0x5d, 0x93, 0xbb, 0x4f, 0x52, 0xec,
+                0x81, 0xa3, 0x02, 0x01, 0x00, 0x0d, 0x00, 0x00, 0x00, 0xaa, 0x01, 0x01, 0x01, 0x01,
+                0x02, 0x02, 0x02, 0x02, 0x03, 0x03, 0x03, 0x03,
             ];
             assert_eq!(result, expected_result);
         }
@@ -574,9 +570,10 @@ mod test {
                 0x35, 0x74, 0x21, 0x30, 0x50, 0xde, 0x6d, 0xd9, 0x1d, 0xdc, 0xa3, 0x8b, 0xf5, 0x7a,
                 0x5b, 0x10,
             ];
-            let mut context = ClientContext::default();
-            let packet =
-                PacketV1::read_packet(&mut context, bytes).expect("Should have succeeded!");
+            let flags_version = 1;
+            let context = SignatureContext::default();
+            let packet = PacketV1::read_packet(bytes, flags_version, &context)
+                .expect("Should have succeeded!");
 
             assert_eq!(packet.base.packet_type, PacketType::Disconnect);
             assert_eq!(packet.base.flags.reliable(), true);
@@ -588,9 +585,10 @@ mod test {
         #[test]
         fn should_encode_packet() {
             let bytes = BASE_PACKET.to_vec();
-            let mut context = ClientContext::default();
-            let mut packet =
-                PacketV1::read_packet(&mut context, bytes).expect("Should have succeeded!");
+            let flags_version = 1;
+            let context = SignatureContext::default();
+            let mut packet = PacketV1::read_packet(bytes, flags_version, &context)
+                .expect("Should have succeeded!");
 
             packet.base.packet_type = PacketType::Disconnect;
             packet.base.flags.clear_flags();
@@ -599,7 +597,7 @@ mod test {
             packet.base.flags.set_flag(PacketFlag::HasSize);
             packet.base.session_id = 1;
 
-            let result: Vec<u8> = packet.to_bytes(&mut context);
+            let result: Vec<u8> = packet.to_bytes(flags_version, &context);
             let expected_result = vec![
                 0xea, 0xd0, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0xe3, 0x00, 0x01, 0x00, 0x00, 0x00,
                 0x35, 0x74, 0x21, 0x30, 0x50, 0xde, 0x6d, 0xd9, 0x1d, 0xdc, 0xa3, 0x8b, 0xf5, 0x7a,
@@ -619,9 +617,10 @@ mod test {
                 0x27, 0x0f, 0x9e, 0xb1, 0x07, 0xda, 0x84, 0x11, 0x88, 0x89, 0x2b, 0x81, 0x92, 0xad,
                 0x91, 0x2b,
             ];
-            let mut context = ClientContext::default();
-            let packet =
-                PacketV1::read_packet(&mut context, bytes).expect("Should have succeeded!");
+            let flags_version = 1;
+            let context = SignatureContext::default();
+            let packet = PacketV1::read_packet(bytes, flags_version, &context)
+                .expect("Should have succeeded!");
 
             assert_eq!(packet.base.packet_type, PacketType::Ping);
             assert_eq!(packet.base.flags.needs_ack(), true);
@@ -632,9 +631,10 @@ mod test {
         #[test]
         fn should_encode_packet() {
             let bytes = BASE_PACKET.to_vec();
-            let mut context = ClientContext::default();
-            let mut packet =
-                PacketV1::read_packet(&mut context, bytes).expect("Should have succeeded!");
+            let flags_version = 1;
+            let context = SignatureContext::default();
+            let mut packet = PacketV1::read_packet(bytes, flags_version, &context)
+                .expect("Should have succeeded!");
 
             packet.base.packet_type = PacketType::Ping;
             packet.base.flags.clear_flags();
@@ -642,7 +642,7 @@ mod test {
             packet.base.flags.set_flag(PacketFlag::HasSize);
             packet.base.session_id = 1;
 
-            let result: Vec<u8> = packet.to_bytes(&mut context);
+            let result: Vec<u8> = packet.to_bytes(flags_version, &context);
             let expected_result = vec![
                 0xea, 0xd0, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0xc4, 0x00, 0x01, 0x00, 0x00, 0x00,
                 0x27, 0x0f, 0x9e, 0xb1, 0x07, 0xda, 0x84, 0x11, 0x88, 0x89, 0x2b, 0x81, 0x92, 0xad,

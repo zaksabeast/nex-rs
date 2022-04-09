@@ -2,16 +2,15 @@ mod base;
 mod packet_flag;
 mod packet_option;
 mod packet_type;
+mod signature_context;
 mod v1;
 
 pub use base::BasePacket;
 pub use packet_flag::{PacketFlag, PacketFlags};
 pub use packet_option::PacketOption;
 pub use packet_type::PacketType;
+pub use signature_context::SignatureContext;
 pub use v1::PacketV1;
-
-use crate::client::ClientContext;
-use crate::rmc::RMCRequest;
 
 pub trait Packet {
     const VERSION: u8;
@@ -21,7 +20,7 @@ pub trait Packet {
 
     fn get_base(&self) -> &BasePacket;
     fn get_mut_base(&mut self) -> &mut BasePacket;
-    fn to_bytes(&mut self, context: &mut ClientContext) -> Vec<u8>;
+    fn to_bytes(&mut self, flags_version: u32, context: &SignatureContext) -> Vec<u8>;
 
     fn get_data(&self) -> &[u8] {
         &self.get_base().data
@@ -101,12 +100,5 @@ pub trait Packet {
     }
     fn set_payload(&mut self, value: Vec<u8>) {
         self.get_mut_base().payload = value;
-    }
-
-    fn get_rmc_request(&self) -> &RMCRequest {
-        &self.get_base().rmc_request
-    }
-    fn set_rmc_request(&mut self, value: RMCRequest) {
-        self.get_mut_base().rmc_request = value;
     }
 }

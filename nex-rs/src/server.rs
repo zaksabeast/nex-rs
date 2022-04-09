@@ -3,6 +3,7 @@ use crate::{
     client::{ClientConnection, ClientContext},
     compression::{dummy_compression, zlib_compression},
     packet::{Packet, PacketFlag, PacketType, PacketV1},
+    rmc::RMCRequest,
 };
 use async_trait::async_trait;
 use getset::{CopyGetters, Getters, Setters};
@@ -42,6 +43,12 @@ pub trait EventHandler {
         &self,
         client: &mut ClientConnection,
         packet: &PacketV1,
+    ) -> Result<(), &'static str>;
+
+    async fn on_rmc_request(
+        &self,
+        client: &mut ClientConnection,
+        rmc_request: &RMCRequest,
     ) -> Result<(), &'static str>;
 }
 
@@ -279,6 +286,11 @@ pub trait Server: EventHandler {
             }
             PacketType::Data => {
                 self.on_data(client, &packet).await?;
+
+                if client.can_decode_rmc_request(&packet) {
+                    let rmc_request = client.decode_rmc_request(&packet)?;
+                    self.on_rmc_request(client, &rmc_request).await?;
+                }
             }
             PacketType::Ping => {
                 self.on_ping(client, &packet).await?;

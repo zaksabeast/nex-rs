@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use nex_rs::client::ClientConnection;
 use nex_rs::nex_types::ResultCode;
-use nex_rs::packet::{Packet, PacketV1};
+use nex_rs::rmc::RMCRequest;
 use nex_rs::server::Server;
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 
@@ -28,10 +28,8 @@ pub trait USUM117Protocol: Server {
     async fn handle_unknown_1(
         &self,
         client: &mut ClientConnection,
-        packet: &PacketV1,
+        request: &RMCRequest,
     ) -> Result<(), &'static str> {
-        let request = packet.get_rmc_request();
-
         match self.unknown_1(client).await {
             Ok(data) => {
                 self.send_success(
@@ -60,10 +58,8 @@ pub trait USUM117Protocol: Server {
     async fn handle_unknown_7(
         &self,
         client: &mut ClientConnection,
-        packet: &PacketV1,
+        request: &RMCRequest,
     ) -> Result<(), &'static str> {
-        let request = packet.get_rmc_request();
-
         match self.unknown_7(client).await {
             Ok(data) => {
                 self.send_success(
@@ -92,10 +88,8 @@ pub trait USUM117Protocol: Server {
     async fn handle_unknown_9(
         &self,
         client: &mut ClientConnection,
-        packet: &PacketV1,
+        request: &RMCRequest,
     ) -> Result<(), &'static str> {
-        let request = packet.get_rmc_request();
-
         match self.unknown_9(client).await {
             Ok(data) => {
                 self.send_success(
@@ -124,10 +118,8 @@ pub trait USUM117Protocol: Server {
     async fn handle_unknown_10(
         &self,
         client: &mut ClientConnection,
-        packet: &PacketV1,
+        request: &RMCRequest,
     ) -> Result<(), &'static str> {
-        let request = packet.get_rmc_request();
-
         match self.unknown_10(client).await {
             Ok(data) => {
                 self.send_success(
@@ -156,10 +148,8 @@ pub trait USUM117Protocol: Server {
     async fn handle_unknown_15(
         &self,
         client: &mut ClientConnection,
-        packet: &PacketV1,
+        request: &RMCRequest,
     ) -> Result<(), &'static str> {
-        let request = packet.get_rmc_request();
-
         match self.unknown_15(client).await {
             Ok(data) => {
                 self.send_success(

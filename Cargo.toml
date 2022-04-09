@@ -1,4 +1,5 @@
 [workspace]
 members = [
     "nex-rs",
+    "nex-protocols-rs",
 ]

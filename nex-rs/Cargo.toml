@@ -5,9 +5,6 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-[dev-dependencies]
-mocktopus = "0.7.11"
-
 [dependencies]
 async-trait = "0.1.52"
 getset = "0.1.2"

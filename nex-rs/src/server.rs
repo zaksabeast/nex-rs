@@ -307,14 +307,7 @@ pub trait Server: EventHandler {
             _ => {}
         }
 
-        if flags.needs_ack()
-            && (packet_type != PacketType::Connect
-                || (packet_type == PacketType::Connect && packet.get_payload().is_empty()))
-        {
-            let nex_version = self.get_base().settings.nex_version;
-            self.acknowledge_packet(&packet, client, nex_version, None)
-                .await?;
-        }
+        self.acknowledge_packet_if_needed(client, &packet).await?;
 
         self.emit_packet_events(client, &packet).await?;
 
@@ -345,6 +338,27 @@ pub trait Server: EventHandler {
 
     async fn send_ping(&self, client: &mut ClientConnection) -> Result<(), &'static str> {
         self.send(client, PacketV1::new_ping_packet()).await
+    }
+
+    async fn acknowledge_packet_if_needed(
+        &self,
+        client: &mut ClientConnection,
+        packet: &PacketV1,
+    ) -> Result<(), &'static str> {
+        let packet_type = packet.get_packet_type();
+        let flags = packet.get_flags();
+        let payload = packet.get_payload();
+
+        if flags.needs_ack()
+            && (packet_type != PacketType::Connect
+                || (packet_type == PacketType::Connect && payload.is_empty()))
+        {
+            let nex_version = self.get_base().settings.nex_version;
+            self.acknowledge_packet(&packet, client, nex_version, None)
+                .await?;
+        }
+
+        Ok(())
     }
 
     async fn acknowledge_packet(

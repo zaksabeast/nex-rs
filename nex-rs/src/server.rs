@@ -191,17 +191,17 @@ pub trait Server: EventHandler {
         self.get_mut_base().ping_kick_thread = Some(ping_kick_thread);
 
         loop {
-            let result = self.handle_socket_message().await;
+            let (buf, peer) = self.receive_data().await?;
+            let result = self.handle_socket_message(buf, peer).await;
             if result.is_err() {
                 println!("Error {:?}", result);
             }
         }
     }
 
-    async fn handle_socket_message(&self) -> Result<(), &'static str> {
+    async fn receive_data(&self) -> Result<(Vec<u8>, SocketAddr), &'static str> {
         let mut buf: Vec<u8> = vec![0; 0x1000];
-        let base = self.get_base();
-        let socket = match &base.socket {
+        let socket = match &self.get_base().socket {
             Some(socket) => Ok(socket),
             None => Err("No socket"),
         }?;
@@ -213,51 +213,63 @@ pub trait Server: EventHandler {
 
         buf.resize(receive_size, 0);
 
-        let client_mutex = &base.clients;
-        let mut clients = client_mutex.lock().await;
+        Ok((buf, peer))
+    }
 
-        let found_client = clients
-            .iter_mut()
-            .find(|client| client.get_address() == peer);
+    async fn emit_packet_events(
+        &self,
+        client: &mut ClientConnection,
+        packet: &PacketV1,
+    ) -> Result<(), &'static str> {
+        match packet.get_packet_type() {
+            PacketType::Syn => {
+                self.on_syn(client, packet).await?;
+            }
+            PacketType::Connect => {
+                self.on_connect(client, packet).await?;
+            }
+            PacketType::Disconnect => {
+                self.on_disconnect(client, packet).await?;
+            }
+            PacketType::Data => {
+                self.on_data(client, packet).await?;
 
-        let client = match found_client {
-            Some(client) => client,
-            None => {
-                let settings = &base.settings;
-                let new_client = ClientConnection::new(peer, settings.create_client_context());
-                clients.push(new_client);
-                // We just pushed a client, so we know one exists
-                clients.last_mut().unwrap()
+                if client.can_decode_rmc_request(packet) {
+                    let rmc_request = client.decode_rmc_request(packet)?;
+                    self.on_rmc_request(client, &rmc_request).await?;
+                }
+            }
+            PacketType::Ping => {
+                self.on_ping(client, packet).await?;
             }
         };
 
-        let packet = client.read_packet(buf)?;
+        Ok(())
+    }
 
-        if !client.is_connected() && packet.get_packet_type() != PacketType::Syn {
-            // Ignore packets from disconnected clients
-            return Ok(());
-        }
-
-        client.set_kick_timer(Some(base.settings.ping_timeout));
-
-        let flags = packet.get_flags();
-        if flags.ack() || flags.multi_ack() {
-            return Ok(());
-        }
-
+    fn should_ignore_packet(&self, client: &mut ClientConnection, packet: &PacketV1) -> bool {
         let packet_type = packet.get_packet_type();
 
-        if packet_type != PacketType::Ping && packet.get_sequence_id() < client.get_sequence_id_in()
-        {
-            // Ignore packets we've already handled
-            return Ok(());
+        // Ignore packets from disconnected clients
+        if !client.is_connected() && packet_type != PacketType::Syn {
+            return true;
         }
 
-        match packet_type {
+        // Ignore packets we've already handled
+        if packet_type != PacketType::Ping && packet.get_sequence_id() < client.get_sequence_id_in()
+        {
+            return true;
+        }
+
+        false
+    }
+
+    fn handle_connection_init(&self, client: &mut ClientConnection, packet: &PacketV1) {
+        match packet.get_packet_type() {
             PacketType::Syn => {
                 client.reset();
                 client.set_is_connected(true);
-                client.set_kick_timer(Some(base.settings.ping_timeout));
+                client.set_kick_timer(Some(self.get_base().settings.ping_timeout));
 
                 let mut connection_signature = vec![0; 16];
                 rand::thread_rng().fill_bytes(&mut connection_signature);
@@ -269,53 +281,78 @@ pub trait Server: EventHandler {
             }
             _ => {}
         }
+    }
 
-        if flags.needs_ack()
-            && (packet_type != PacketType::Connect
-                || (packet_type == PacketType::Connect && packet.get_payload().is_empty()))
-        {
-            let nex_version = self.get_base().settings.nex_version;
-            self.acknowledge_packet(&packet, client, nex_version, None)
-                .await?;
-        }
-
-        match packet_type {
-            PacketType::Syn => {
-                self.on_syn(client, &packet).await?;
-            }
-            PacketType::Connect => {
-                self.on_connect(client, &packet).await?;
-            }
-            PacketType::Disconnect => {
-                self.on_disconnect(client, &packet).await?;
-            }
-            PacketType::Data => {
-                self.on_data(client, &packet).await?;
-
-                if client.can_decode_rmc_request(&packet) {
-                    let rmc_request = client.decode_rmc_request(&packet)?;
-                    self.on_rmc_request(client, &rmc_request).await?;
-                }
-            }
-            PacketType::Ping => {
-                self.on_ping(client, &packet).await?;
-            }
-        };
-
+    fn increment_sequence_id_in(&self, client: &mut ClientConnection, packet: &PacketV1) {
         // Pings have their own sequence ids
-        if packet_type != PacketType::Ping {
+        if packet.get_packet_type() != PacketType::Ping {
             client.increment_sequence_id_in();
         }
+    }
 
-        if packet_type == PacketType::Disconnect {
-            let addr = client.get_address();
-            self.kick(&mut clients, addr);
+    async fn handle_disconnect(&self, addr: SocketAddr, packet: &PacketV1) {
+        if packet.get_packet_type() == PacketType::Disconnect {
+            self.kick(addr).await;
         }
+    }
+
+    fn find_or_create_client<'a>(
+        &self,
+        clients: &'a mut Vec<ClientConnection>,
+        addr: SocketAddr,
+    ) -> &'a mut ClientConnection {
+        let client_index = clients
+            .iter()
+            .position(|client| client.get_address() == addr);
+
+        match client_index {
+            Some(index) => &mut clients[index],
+            None => {
+                let settings = &self.get_base().settings;
+                let new_client = ClientConnection::new(addr, settings.create_client_context());
+                clients.push(new_client);
+                // We just pushed a client, so we know one exists
+                clients.last_mut().unwrap()
+            }
+        }
+    }
+
+    async fn handle_socket_message(
+        &self,
+        message: Vec<u8>,
+        peer: SocketAddr,
+    ) -> Result<(), &'static str> {
+        let base = self.get_base();
+
+        let client_mutex = &base.clients;
+        let mut clients = client_mutex.lock().await;
+        let client = self.find_or_create_client(&mut clients, peer);
+
+        let packet = client.read_packet(message)?;
+
+        if self.should_ignore_packet(client, &packet) {
+            return Ok(());
+        }
+
+        client.set_kick_timer(Some(base.settings.ping_timeout));
+
+        if self.accept_acknowledge_packet(&packet) {
+            return Ok(());
+        }
+
+        self.handle_connection_init(client, &packet);
+        self.acknowledge_packet(client, &packet).await?;
+        self.emit_packet_events(client, &packet).await?;
+        self.increment_sequence_id_in(client, &packet);
+        drop(clients);
+        self.handle_disconnect(peer, &packet).await;
 
         Ok(())
     }
 
-    fn kick(&self, clients: &mut Vec<ClientConnection>, addr: SocketAddr) {
+    async fn kick(&self, addr: SocketAddr) {
+        let client_mutex = self.get_clients();
+        let mut clients = client_mutex.lock().await;
         let client_index = clients
             .iter_mut()
             .position(|potential_client| potential_client.get_address() == addr);
@@ -329,13 +366,42 @@ pub trait Server: EventHandler {
         self.send(client, PacketV1::new_ping_packet()).await
     }
 
+    fn accept_acknowledge_packet(&self, packet: &PacketV1) -> bool {
+        let flags = packet.get_flags();
+        if flags.ack() || flags.multi_ack() {
+            // TODO: actually handle ack packets
+            return true;
+        }
+
+        false
+    }
+
     async fn acknowledge_packet(
+        &self,
+        client: &mut ClientConnection,
+        packet: &PacketV1,
+    ) -> Result<(), &'static str> {
+        let packet_type = packet.get_packet_type();
+        let flags = packet.get_flags();
+        let payload = packet.get_payload();
+
+        if flags.needs_ack()
+            && (packet_type != PacketType::Connect
+                || (packet_type == PacketType::Connect && payload.is_empty()))
+        {
+            self.send_acknowledge_packet(packet, client, None).await?;
+        }
+
+        Ok(())
+    }
+
+    async fn send_acknowledge_packet(
         &self,
         packet: &PacketV1,
         client: &mut ClientConnection,
-        nex_version: u32,
         payload: Option<Vec<u8>>,
     ) -> Result<(), &'static str> {
+        let nex_version = self.get_base().settings.nex_version;
         let mut ack_packet = packet.new_ack_packet();
 
         if let Some(payload) = payload {
@@ -476,5 +542,113 @@ pub trait Server: EventHandler {
         } else {
             dummy_compression::compress(data)
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::packet::SignatureContext;
+    use std::net::{IpAddr, Ipv4Addr};
+
+    #[derive(Default)]
+    struct TestServer {
+        base: BaseServer,
+    }
+
+    #[async_trait(?Send)]
+    impl EventHandler for TestServer {
+        async fn on_syn(
+            &self,
+            _client: &mut ClientConnection,
+            _packet: &PacketV1,
+        ) -> Result<(), &'static str> {
+            Ok(())
+        }
+        async fn on_connect(
+            &self,
+            _client: &mut ClientConnection,
+            _packet: &PacketV1,
+        ) -> Result<(), &'static str> {
+            Ok(())
+        }
+        async fn on_data(
+            &self,
+            _client: &mut ClientConnection,
+            _packet: &PacketV1,
+        ) -> Result<(), &'static str> {
+            Ok(())
+        }
+        async fn on_disconnect(
+            &self,
+            _client: &mut ClientConnection,
+            _packet: &PacketV1,
+        ) -> Result<(), &'static str> {
+            Ok(())
+        }
+        async fn on_ping(
+            &self,
+            _client: &mut ClientConnection,
+            _packet: &PacketV1,
+        ) -> Result<(), &'static str> {
+            Ok(())
+        }
+
+        async fn on_rmc_request(
+            &self,
+            _client: &mut ClientConnection,
+            _rmc_request: &RMCRequest,
+        ) -> Result<(), &'static str> {
+            Ok(())
+        }
+    }
+
+    #[async_trait(?Send)]
+    impl Server for TestServer {
+        fn get_base(&self) -> &BaseServer {
+            &self.base
+        }
+        fn get_mut_base(&mut self) -> &mut BaseServer {
+            &mut self.base
+        }
+    }
+
+    async fn get_server_with_client(client: ClientConnection) -> TestServer {
+        let server = TestServer::default();
+        let client_mutex = server.get_clients();
+        let mut clients = client_mutex.lock().await;
+        clients.push(client);
+
+        server
+    }
+
+    #[tokio::test]
+    #[ntest::timeout(5000)]
+    async fn should_not_deadlock_when_handling_disconnect_message() {
+        // Set up client
+        let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080);
+        let mut client = ClientConnection::new(addr, ClientContext::default());
+        client.set_is_connected(true);
+
+        // Get server with client
+        let server = get_server_with_client(client).await;
+
+        // Set up packet
+        let mut disconnect_packet = PacketV1::new_disconnect_packet();
+        let mut flags = disconnect_packet.get_flags();
+        // Prevent ack response from server for test
+        flags.clear_flag(PacketFlag::NeedsAck);
+        disconnect_packet.set_flags(flags);
+        let packet_bytes = disconnect_packet.to_bytes(4, &SignatureContext::default());
+
+        // Handle disconnect
+        server
+            .handle_socket_message(packet_bytes, addr)
+            .await
+            .unwrap();
+
+        let client_mutex = server.get_clients();
+        let clients = client_mutex.lock().await;
+        assert_eq!(clients.len(), 0);
     }
 }

@@ -121,6 +121,19 @@ impl PacketV1 {
         }
     }
 
+    pub fn new_disconnect_packet() -> Self {
+        Self {
+            base: BasePacket {
+                source: Self::SERVER_ID,
+                destination: Self::CLIENT_ID,
+                flags: PacketFlag::Reliable | PacketFlag::NeedsAck | PacketFlag::HasSize,
+                packet_type: PacketType::Disconnect,
+                ..Default::default()
+            },
+            ..Default::default()
+        }
+    }
+
     pub fn new_ack_packet(&self) -> Self {
         Self {
             base: BasePacket {

@@ -63,15 +63,13 @@ impl Packet for PacketV1 {
         stream.checked_write_stream_le(&self.substream_id);
         stream.checked_write_stream_le(&self.base.sequence_id);
 
-        let header = &stream.get_slice()[2..14];
         let signature = Self::calculate_signature(
-            header,
+            &stream.get_slice()[2..14].try_into().unwrap(),
             &self.base.payload,
             context.client_connection_signature(),
             &options,
             context,
-        )
-        .expect("Signature could not be calculated");
+        );
 
         stream.checked_write_stream_bytes(&signature);
 
@@ -261,14 +259,13 @@ impl PacketV1 {
             self.base.payload = stream.default_read_byte_stream(payload_size);
         }
 
-        let header = &data[2..14];
         let calculated_signature = Self::calculate_signature(
-            header,
+            &data[2..14].try_into().unwrap(),
             &self.base.payload,
             context.server_connection_signature(),
             &options,
             context,
-        )?;
+        );
 
         if calculated_signature != self.base.signature {
             return Err("Calculated signature did not match");
@@ -350,27 +347,24 @@ impl PacketV1 {
     }
 
     pub fn calculate_signature(
-        header: &[u8],
+        header: &[u8; 12],
         payload: &[u8],
         connection_signature: &[u8],
         options: &[u8],
         context: &SignatureContext,
-    ) -> Result<Vec<u8>, &'static str> {
-        if header.len() < 8 {
-            return Err("Header is too small");
-        }
-
-        let key = context.signature_key();
+    ) -> Vec<u8> {
+        let key: &[u8; 16] = context.signature_key();
         let signature_base = context.signature_base();
 
-        let mut mac = Hmac::<Md5>::new_from_slice(key).map_err(|_| "Invalid hamc key size")?;
+        // The key being [u8; 16] guarantees we won't run into an error
+        let mut mac = Hmac::<Md5>::new_from_slice(key).unwrap();
         mac.update(&header[4..]);
         mac.update(context.session_key());
         mac.update(&signature_base.to_le_bytes());
         mac.update(connection_signature);
         mac.update(options);
         mac.update(payload);
-        Ok(mac.finalize().into_bytes().to_vec())
+        mac.finalize().into_bytes().to_vec()
     }
 }
 

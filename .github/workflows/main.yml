@@ -1,0 +1,30 @@
+name: Lint and test
+
+on:
+  pull_request:
+  push:
+    branches:
+      - "main"
+
+jobs:
+  lint-test-build:
+    name: Lint and test
+    runs-on: ubuntu-latest
+    container: rust:slim
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Install tools
+        run: |
+          rustup component add clippy
+          rustup component add rustfmt
+
+      - name: Format check
+        run: cargo fmt --check
+
+      - name: Lint
+        run: cargo clippy -- -D warnings
+
+      - name: Test
+        run: cargo test

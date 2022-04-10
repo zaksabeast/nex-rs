@@ -315,13 +315,15 @@ pub trait Server: EventHandler {
 
         if packet_type == PacketType::Disconnect {
             let addr = client.get_address();
-            self.kick(&mut clients, addr);
+            self.kick(addr).await;
         }
 
         Ok(())
     }
 
-    fn kick(&self, clients: &mut Vec<ClientConnection>, addr: SocketAddr) {
+    async fn kick(&self, addr: SocketAddr) {
+        let client_mutex = self.get_clients();
+        let mut clients = client_mutex.lock().await;
         let client_index = clients
             .iter_mut()
             .position(|potential_client| potential_client.get_address() == addr);

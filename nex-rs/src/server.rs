@@ -296,27 +296,34 @@ pub trait Server: EventHandler {
         }
     }
 
+    fn find_or_create_client<'a>(
+        &self,
+        clients: &'a mut Vec<ClientConnection>,
+        addr: SocketAddr,
+    ) -> &'a mut ClientConnection {
+        let client_index = clients
+            .iter()
+            .position(|client| client.get_address() == addr);
+
+        match client_index {
+            Some(index) => &mut clients[index],
+            None => {
+                let settings = &self.get_base().settings;
+                let new_client = ClientConnection::new(addr, settings.create_client_context());
+                clients.push(new_client);
+                // We just pushed a client, so we know one exists
+                clients.last_mut().unwrap()
+            }
+        }
+    }
+
     async fn handle_socket_message(&self) -> Result<(), &'static str> {
         let base = self.get_base();
         let (buf, peer) = self.receive_data().await?;
 
         let client_mutex = &base.clients;
         let mut clients = client_mutex.lock().await;
-
-        let found_client = clients
-            .iter_mut()
-            .find(|client| client.get_address() == peer);
-
-        let client = match found_client {
-            Some(client) => client,
-            None => {
-                let settings = &base.settings;
-                let new_client = ClientConnection::new(peer, settings.create_client_context());
-                clients.push(new_client);
-                // We just pushed a client, so we know one exists
-                clients.last_mut().unwrap()
-            }
-        };
+        let client = self.find_or_create_client(&mut clients, peer);
 
         let packet = client.read_packet(buf)?;
 

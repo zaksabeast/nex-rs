@@ -263,7 +263,7 @@ pub trait Server: EventHandler {
         return false;
     }
 
-    fn proces_connection_init(&self, client: &mut ClientConnection, packet: &PacketV1) {
+    fn handle_connection_init(&self, client: &mut ClientConnection, packet: &PacketV1) {
         match packet.get_packet_type() {
             PacketType::Syn => {
                 client.reset();
@@ -337,7 +337,7 @@ pub trait Server: EventHandler {
             return Ok(());
         }
 
-        self.proces_connection_init(client, &packet);
+        self.handle_connection_init(client, &packet);
         self.acknowledge_packet(client, &packet).await?;
         self.emit_packet_events(client, &packet).await?;
         self.increment_sequence_id_in(client, &packet);

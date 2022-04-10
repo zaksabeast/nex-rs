@@ -1,6 +1,7 @@
 use async_trait::async_trait;
 use nex_rs::client::ClientConnection;
 use nex_rs::nex_types::ResultCode;
+use nex_rs::result::NexResult;
 use nex_rs::rmc::RMCRequest;
 use nex_rs::server::Server;
 use num_enum::{IntoPrimitive, TryFromPrimitive};
@@ -29,7 +30,7 @@ pub trait USUM117Protocol: Server {
         &self,
         client: &mut ClientConnection,
         request: &RMCRequest,
-    ) -> Result<(), &'static str> {
+    ) -> NexResult<()> {
         match self.unknown_1(client).await {
             Ok(data) => {
                 self.send_success(
@@ -59,7 +60,7 @@ pub trait USUM117Protocol: Server {
         &self,
         client: &mut ClientConnection,
         request: &RMCRequest,
-    ) -> Result<(), &'static str> {
+    ) -> NexResult<()> {
         match self.unknown_7(client).await {
             Ok(data) => {
                 self.send_success(
@@ -89,7 +90,7 @@ pub trait USUM117Protocol: Server {
         &self,
         client: &mut ClientConnection,
         request: &RMCRequest,
-    ) -> Result<(), &'static str> {
+    ) -> NexResult<()> {
         match self.unknown_9(client).await {
             Ok(data) => {
                 self.send_success(
@@ -119,7 +120,7 @@ pub trait USUM117Protocol: Server {
         &self,
         client: &mut ClientConnection,
         request: &RMCRequest,
-    ) -> Result<(), &'static str> {
+    ) -> NexResult<()> {
         match self.unknown_10(client).await {
             Ok(data) => {
                 self.send_success(
@@ -149,7 +150,7 @@ pub trait USUM117Protocol: Server {
         &self,
         client: &mut ClientConnection,
         request: &RMCRequest,
-    ) -> Result<(), &'static str> {
+    ) -> NexResult<()> {
         match self.unknown_15(client).await {
             Ok(data) => {
                 self.send_success(

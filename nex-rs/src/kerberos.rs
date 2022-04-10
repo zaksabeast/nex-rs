@@ -1,4 +1,7 @@
-use crate::rc4::Rc4;
+use crate::{
+    crypt_result::{CryptResult, Error},
+    rc4::Rc4,
+};
 use hmac::{Hmac, Mac};
 use md5::Md5;
 
@@ -15,35 +18,34 @@ impl KerberosEncryption {
         }
     }
 
-    pub fn encrypt(&mut self, buffer: &[u8]) -> Result<Vec<u8>, &'static str> {
-        let mut encrypted = self.cipher.encrypt(buffer).expect("Encrypt failed");
+    pub fn encrypt(&mut self, buffer: &[u8]) -> CryptResult<Vec<u8>> {
+        let mut encrypted = self.cipher.encrypt(buffer)?;
 
-        let mut mac =
-            Hmac::<Md5>::new_from_slice(&self.key).map_err(|_| "Invalid hamc key size")?;
+        let mut mac = Hmac::<Md5>::new_from_slice(&self.key).map_err(|_| Error::InvalidKeySize)?;
         mac.update(&encrypted);
 
         encrypted.append(&mut mac.finalize().into_bytes().to_vec());
         Ok(encrypted)
     }
 
-    pub fn decrypt(&mut self, buffer: &[u8]) -> Result<Vec<u8>, &'static str> {
+    pub fn decrypt(&mut self, buffer: &[u8]) -> CryptResult<Vec<u8>> {
         if self.validate(buffer)? {
             let offset = buffer.len() - 0x10;
             let encrypted = &buffer[..offset];
 
             self.cipher.decrypt(encrypted)
         } else {
-            Err("INVALID KERB CHECKSUM")
+            Err(Error::InvalidChecksum)
         }
     }
 
-    pub fn validate(&self, buffer: &[u8]) -> Result<bool, &'static str> {
+    pub fn validate(&self, buffer: &[u8]) -> CryptResult<bool> {
         let offset = buffer.len() - 0x10;
         let data = &buffer[..offset];
         let checksum = &buffer[offset..];
 
         let mut cipher =
-            Hmac::<Md5>::new_from_slice(&self.key).map_err(|_| "Invalid hamc key size")?;
+            Hmac::<Md5>::new_from_slice(&self.key).map_err(|_| Error::InvalidKeySize)?;
         cipher.update(data);
 
         let mac = cipher.finalize().into_bytes().to_vec();

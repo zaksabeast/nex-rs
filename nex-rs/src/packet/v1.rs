@@ -1,5 +1,6 @@
 use super::{
-    BasePacket, Packet, PacketFlag, PacketFlags, PacketOption, PacketType, SignatureContext,
+    BasePacket, Error, Packet, PacketFlag, PacketFlags, PacketOption, PacketResult, PacketType,
+    SignatureContext,
 };
 use hmac::{Hmac, Mac};
 use md5::Md5;
@@ -152,7 +153,7 @@ impl PacketV1 {
         data: Vec<u8>,
         flags_version: u32,
         context: &SignatureContext,
-    ) -> Result<Self, &'static str> {
+    ) -> PacketResult<Self> {
         let data_len = data.len();
 
         let mut packet = Self {
@@ -195,17 +196,17 @@ impl PacketV1 {
         self.maximum_substream_id = value;
     }
 
-    fn decode(
-        &mut self,
-        flags_version: u32,
-        context: &SignatureContext,
-    ) -> Result<(), &'static str> {
+    fn decode(&mut self, flags_version: u32, context: &SignatureContext) -> PacketResult<()> {
         let data_len = self.base.data.len();
         let data = self.base.data.clone();
 
         // magic + header + signature
         if data_len < 30 {
-            return Err("Packet length is too small!");
+            return Err(Error::InvalidSize {
+                wanted_size: 30,
+                received_size: data_len,
+                context: "Data length is less than the smallest possible packet size",
+            });
         }
 
         let mut stream = StreamContainer::new(data.as_slice());
@@ -213,12 +214,12 @@ impl PacketV1 {
         self.magic = stream.default_read_stream_le();
 
         if self.magic != 0xd0ea {
-            return Err("Invalid magic");
+            return Err(Error::InvalidMagic { magic: self.magic });
         }
 
         let version: u8 = stream.default_read_stream_le();
-        if version != 1 {
-            return Err("Invalid version");
+        if version != Self::VERSION {
+            return Err(Error::InvalidVersion { version });
         }
 
         let options_length = usize::from(stream.default_read_stream_le::<u8>());
@@ -239,7 +240,7 @@ impl PacketV1 {
             flags = type_flags >> 0x4;
         }
 
-        self.base.packet_type = packet_type.try_into().map_err(|_| "Invalid packet type")?;
+        self.base.packet_type = packet_type.try_into()?;
         self.base.flags = PacketFlags::new(flags);
 
         self.base.session_id = stream.default_read_stream_le();
@@ -247,8 +248,13 @@ impl PacketV1 {
         self.base.sequence_id = stream.default_read_stream_le();
         self.base.signature = stream.default_read_byte_stream(16);
 
-        if data_len < stream.get_index() + options_length {
-            return Err("Packet specific data size does not match");
+        let options_end = stream.get_index() + options_length;
+        if data_len < options_end {
+            return Err(Error::InvalidSize {
+                wanted_size: options_end,
+                received_size: data_len,
+                context: "The options length does not fit into the packet data length",
+            });
         }
 
         let options = stream.default_read_byte_stream(options_length);
@@ -268,22 +274,25 @@ impl PacketV1 {
         );
 
         if calculated_signature != self.base.signature {
-            return Err("Calculated signature did not match");
+            return Err(Error::InvalidSignature {
+                calculated_signature,
+                found_signature: self.base.signature.clone(),
+                packet_type: self.base.packet_type,
+                sequence_id: self.base.sequence_id,
+            });
         }
 
         Ok(())
     }
 
-    pub fn decode_options(&mut self, options: &[u8]) -> Result<(), &'static str> {
+    pub fn decode_options(&mut self, options: &[u8]) -> PacketResult<()> {
         let mut options_stream = StreamContainer::new(options);
         let options_len = options.len();
 
         let mut i = 0;
         while i < options_len {
-            let option_type: PacketOption = options_stream
-                .default_read_stream_le::<u8>()
-                .try_into()
-                .map_err(|_| "Invalid packet option")?;
+            let option_type: PacketOption =
+                options_stream.default_read_stream_le::<u8>().try_into()?;
             let option_size = usize::from(options_stream.default_read_stream_le::<u8>());
 
             match option_type {

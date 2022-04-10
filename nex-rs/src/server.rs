@@ -198,10 +198,9 @@ pub trait Server: EventHandler {
         }
     }
 
-    async fn handle_socket_message(&self) -> Result<(), &'static str> {
+    async fn receive_data(&self) -> Result<(Vec<u8>, SocketAddr), &'static str> {
         let mut buf: Vec<u8> = vec![0; 0x1000];
-        let base = self.get_base();
-        let socket = match &base.socket {
+        let socket = match &self.get_base().socket {
             Some(socket) => Ok(socket),
             None => Err("No socket"),
         }?;
@@ -212,6 +211,13 @@ pub trait Server: EventHandler {
             .map_err(|_| "UDP Receive error")?;
 
         buf.resize(receive_size, 0);
+
+        Ok((buf, peer))
+    }
+
+    async fn handle_socket_message(&self) -> Result<(), &'static str> {
+        let base = self.get_base();
+        let (buf, peer) = self.receive_data().await?;
 
         let client_mutex = &base.clients;
         let mut clients = client_mutex.lock().await;

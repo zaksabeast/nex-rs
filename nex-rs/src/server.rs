@@ -246,6 +246,56 @@ pub trait Server: EventHandler {
         Ok(())
     }
 
+    fn should_ignore_packet(&self, client: &mut ClientConnection, packet: &PacketV1) -> bool {
+        let packet_type = packet.get_packet_type();
+
+        // Ignore packets from disconnected clients
+        if !client.is_connected() && packet_type != PacketType::Syn {
+            return true;
+        }
+
+        // Ignore packets we've already handled
+        if packet_type != PacketType::Ping && packet.get_sequence_id() < client.get_sequence_id_in()
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    fn proces_connection_init(&self, client: &mut ClientConnection, packet: &PacketV1) {
+        match packet.get_packet_type() {
+            PacketType::Syn => {
+                client.reset();
+                client.set_is_connected(true);
+                client.set_kick_timer(Some(self.get_base().settings.ping_timeout));
+
+                let mut connection_signature = vec![0; 16];
+                rand::thread_rng().fill_bytes(&mut connection_signature);
+                client.set_server_connection_signature(connection_signature.clone());
+            }
+            PacketType::Connect => {
+                let client_connection_signature = packet.get_connection_signature().to_vec();
+                client.set_client_connection_signature(client_connection_signature);
+            }
+            _ => {}
+        }
+    }
+
+    fn increment_sequence_id_in(&self, client: &mut ClientConnection, packet: &PacketV1) {
+        // Pings have their own sequence ids
+        if packet.get_packet_type() != PacketType::Ping {
+            client.increment_sequence_id_in();
+        }
+    }
+
+    async fn handle_disconnect(&self, client: &mut ClientConnection, packet: &PacketV1) {
+        if packet.get_packet_type() == PacketType::Disconnect {
+            let addr = client.get_address();
+            self.kick(addr).await;
+        }
+    }
+
     async fn handle_socket_message(&self) -> Result<(), &'static str> {
         let base = self.get_base();
         let (buf, peer) = self.receive_data().await?;
@@ -270,56 +320,21 @@ pub trait Server: EventHandler {
 
         let packet = client.read_packet(buf)?;
 
-        if !client.is_connected() && packet.get_packet_type() != PacketType::Syn {
-            // Ignore packets from disconnected clients
+        if self.should_ignore_packet(client, &packet) {
             return Ok(());
         }
 
         client.set_kick_timer(Some(base.settings.ping_timeout));
 
-        let flags = packet.get_flags();
-        if flags.ack() || flags.multi_ack() {
+        if self.accept_acknowledge_packet(&packet) {
             return Ok(());
         }
 
-        let packet_type = packet.get_packet_type();
-
-        if packet_type != PacketType::Ping && packet.get_sequence_id() < client.get_sequence_id_in()
-        {
-            // Ignore packets we've already handled
-            return Ok(());
-        }
-
-        match packet_type {
-            PacketType::Syn => {
-                client.reset();
-                client.set_is_connected(true);
-                client.set_kick_timer(Some(base.settings.ping_timeout));
-
-                let mut connection_signature = vec![0; 16];
-                rand::thread_rng().fill_bytes(&mut connection_signature);
-                client.set_server_connection_signature(connection_signature.clone());
-            }
-            PacketType::Connect => {
-                let client_connection_signature = packet.get_connection_signature().to_vec();
-                client.set_client_connection_signature(client_connection_signature);
-            }
-            _ => {}
-        }
-
-        self.acknowledge_packet_if_needed(client, &packet).await?;
-
+        self.proces_connection_init(client, &packet);
+        self.acknowledge_packet(client, &packet).await?;
         self.emit_packet_events(client, &packet).await?;
-
-        // Pings have their own sequence ids
-        if packet_type != PacketType::Ping {
-            client.increment_sequence_id_in();
-        }
-
-        if packet_type == PacketType::Disconnect {
-            let addr = client.get_address();
-            self.kick(addr).await;
-        }
+        self.increment_sequence_id_in(client, &packet);
+        self.handle_disconnect(client, &packet).await;
 
         Ok(())
     }
@@ -340,7 +355,17 @@ pub trait Server: EventHandler {
         self.send(client, PacketV1::new_ping_packet()).await
     }
 
-    async fn acknowledge_packet_if_needed(
+    fn accept_acknowledge_packet(&self, packet: &PacketV1) -> bool {
+        let flags = packet.get_flags();
+        if flags.ack() || flags.multi_ack() {
+            // TODO: actually handle ack packets
+            return true;
+        }
+
+        return false;
+    }
+
+    async fn acknowledge_packet(
         &self,
         client: &mut ClientConnection,
         packet: &PacketV1,
@@ -354,14 +379,14 @@ pub trait Server: EventHandler {
                 || (packet_type == PacketType::Connect && payload.is_empty()))
         {
             let nex_version = self.get_base().settings.nex_version;
-            self.acknowledge_packet(&packet, client, nex_version, None)
+            self.send_acknowledge_packet(&packet, client, nex_version, None)
                 .await?;
         }
 
         Ok(())
     }
 
-    async fn acknowledge_packet(
+    async fn send_acknowledge_packet(
         &self,
         packet: &PacketV1,
         client: &mut ClientConnection,

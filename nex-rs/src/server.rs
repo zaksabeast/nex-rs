@@ -289,9 +289,8 @@ pub trait Server: EventHandler {
         }
     }
 
-    async fn handle_disconnect(&self, client: &mut ClientConnection, packet: &PacketV1) {
+    async fn handle_disconnect(&self, addr: SocketAddr, packet: &PacketV1) {
         if packet.get_packet_type() == PacketType::Disconnect {
-            let addr = client.get_address();
             self.kick(addr).await;
         }
     }
@@ -341,7 +340,8 @@ pub trait Server: EventHandler {
         self.acknowledge_packet(client, &packet).await?;
         self.emit_packet_events(client, &packet).await?;
         self.increment_sequence_id_in(client, &packet);
-        self.handle_disconnect(client, &packet).await;
+        drop(clients);
+        self.handle_disconnect(peer, &packet).await;
 
         Ok(())
     }

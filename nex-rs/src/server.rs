@@ -215,6 +215,37 @@ pub trait Server: EventHandler {
         Ok((buf, peer))
     }
 
+    async fn emit_packet_events(
+        &self,
+        client: &mut ClientConnection,
+        packet: &PacketV1,
+    ) -> Result<(), &'static str> {
+        match packet.get_packet_type() {
+            PacketType::Syn => {
+                self.on_syn(client, &packet).await?;
+            }
+            PacketType::Connect => {
+                self.on_connect(client, &packet).await?;
+            }
+            PacketType::Disconnect => {
+                self.on_disconnect(client, &packet).await?;
+            }
+            PacketType::Data => {
+                self.on_data(client, &packet).await?;
+
+                if client.can_decode_rmc_request(&packet) {
+                    let rmc_request = client.decode_rmc_request(&packet)?;
+                    self.on_rmc_request(client, &rmc_request).await?;
+                }
+            }
+            PacketType::Ping => {
+                self.on_ping(client, &packet).await?;
+            }
+        };
+
+        Ok(())
+    }
+
     async fn handle_socket_message(&self) -> Result<(), &'static str> {
         let base = self.get_base();
         let (buf, peer) = self.receive_data().await?;
@@ -285,28 +316,7 @@ pub trait Server: EventHandler {
                 .await?;
         }
 
-        match packet_type {
-            PacketType::Syn => {
-                self.on_syn(client, &packet).await?;
-            }
-            PacketType::Connect => {
-                self.on_connect(client, &packet).await?;
-            }
-            PacketType::Disconnect => {
-                self.on_disconnect(client, &packet).await?;
-            }
-            PacketType::Data => {
-                self.on_data(client, &packet).await?;
-
-                if client.can_decode_rmc_request(&packet) {
-                    let rmc_request = client.decode_rmc_request(&packet)?;
-                    self.on_rmc_request(client, &rmc_request).await?;
-                }
-            }
-            PacketType::Ping => {
-                self.on_ping(client, &packet).await?;
-            }
-        };
+        self.emit_packet_events(client, &packet).await?;
 
         // Pings have their own sequence ids
         if packet_type != PacketType::Ping {

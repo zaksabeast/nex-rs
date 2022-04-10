@@ -385,9 +385,7 @@ pub trait Server: EventHandler {
             && (packet_type != PacketType::Connect
                 || (packet_type == PacketType::Connect && payload.is_empty()))
         {
-            let nex_version = self.get_base().settings.nex_version;
-            self.send_acknowledge_packet(&packet, client, nex_version, None)
-                .await?;
+            self.send_acknowledge_packet(&packet, client, None).await?;
         }
 
         Ok(())
@@ -397,9 +395,9 @@ pub trait Server: EventHandler {
         &self,
         packet: &PacketV1,
         client: &mut ClientConnection,
-        nex_version: u32,
         payload: Option<Vec<u8>>,
     ) -> Result<(), &'static str> {
+        let nex_version = self.get_base().settings.nex_version;
         let mut ack_packet = packet.new_ack_packet();
 
         if let Some(payload) = payload {

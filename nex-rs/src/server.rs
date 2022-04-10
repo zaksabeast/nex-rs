@@ -3,7 +3,7 @@ use crate::{
     client::{ClientConnection, ClientContext},
     compression::{dummy_compression, zlib_compression},
     packet::{Packet, PacketFlag, PacketType, PacketV1},
-    result::NexResult,
+    result::{Error as NexError, NexResult},
     rmc::RMCRequest,
 };
 use async_trait::async_trait;
@@ -61,6 +61,7 @@ pub trait EventHandler {
         client: &mut ClientConnection,
         rmc_request: &RMCRequest,
     ) -> NexResult<()>;
+    async fn on_error(&self, error: NexError);
 }
 
 #[derive(Debug, Getters, CopyGetters, Setters)]
@@ -207,9 +208,8 @@ pub trait Server: EventHandler {
 
         loop {
             let (buf, peer) = self.receive_data().await?;
-            let result = self.handle_socket_message(buf, peer).await;
-            if result.is_err() {
-                println!("Error {:?}", result);
+            if let Err(error) = self.handle_socket_message(buf, peer).await {
+                self.on_error(error).await;
             }
         }
     }
@@ -604,6 +604,7 @@ mod test {
         ) -> NexResult<()> {
             Ok(())
         }
+        async fn on_error(&self, _error: NexError) {}
     }
 
     #[async_trait(?Send)]

@@ -27,10 +27,8 @@ impl Packet for PacketV1 {
     }
 
     fn to_bytes(self: &mut PacketV1, flags_version: u32, context: &SignatureContext) -> Vec<u8> {
-        if self.base.packet_type == PacketType::Data {
-            if !self.base.flags.has_size() {
-                self.base.flags |= PacketFlag::HasSize;
-            }
+        if self.base.packet_type == PacketType::Data && !self.base.flags.has_size() {
+            self.base.flags |= PacketFlag::HasSize;
         }
 
         let type_flags: u16 = if flags_version == 0 {

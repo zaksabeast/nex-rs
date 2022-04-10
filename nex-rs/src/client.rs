@@ -82,7 +82,7 @@ impl ClientContext {
 
     fn decrypt_packet(&mut self, packet: &PacketV1) -> Result<Vec<u8>, &'static str> {
         self.can_decrypt_packet(packet)?;
-        self.decipher.decrypt(&packet.get_payload())
+        self.decipher.decrypt(packet.get_payload())
     }
 
     fn can_encrypt_packet(&self, packet: &PacketV1) -> Result<(), &'static str> {
@@ -102,7 +102,7 @@ impl ClientContext {
     }
 
     fn encrypt_packet(&mut self, packet: &mut PacketV1) {
-        if self.can_encrypt_packet(&packet).is_ok() {
+        if self.can_encrypt_packet(packet).is_ok() {
             let payload = self.cipher.encrypt(packet.get_payload()).unwrap();
             packet.set_payload(payload);
         }

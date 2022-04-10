@@ -191,7 +191,8 @@ pub trait Server: EventHandler {
         self.get_mut_base().ping_kick_thread = Some(ping_kick_thread);
 
         loop {
-            let result = self.handle_socket_message().await;
+            let (buf, peer) = self.receive_data().await?;
+            let result = self.handle_socket_message(buf, peer).await;
             if result.is_err() {
                 println!("Error {:?}", result);
             }
@@ -316,15 +317,18 @@ pub trait Server: EventHandler {
         }
     }
 
-    async fn handle_socket_message(&self) -> Result<(), &'static str> {
+    async fn handle_socket_message(
+        &self,
+        message: Vec<u8>,
+        peer: SocketAddr,
+    ) -> Result<(), &'static str> {
         let base = self.get_base();
-        let (buf, peer) = self.receive_data().await?;
 
         let client_mutex = &base.clients;
         let mut clients = client_mutex.lock().await;
         let client = self.find_or_create_client(&mut clients, peer);
 
-        let packet = client.read_packet(buf)?;
+        let packet = client.read_packet(message)?;
 
         if self.should_ignore_packet(client, &packet) {
             return Ok(());
@@ -538,5 +542,113 @@ pub trait Server: EventHandler {
         } else {
             dummy_compression::compress(data)
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::packet::SignatureContext;
+    use std::net::{IpAddr, Ipv4Addr};
+
+    #[derive(Default)]
+    struct TestServer {
+        base: BaseServer,
+    }
+
+    #[async_trait(?Send)]
+    impl EventHandler for TestServer {
+        async fn on_syn(
+            &self,
+            _client: &mut ClientConnection,
+            _packet: &PacketV1,
+        ) -> Result<(), &'static str> {
+            Ok(())
+        }
+        async fn on_connect(
+            &self,
+            _client: &mut ClientConnection,
+            _packet: &PacketV1,
+        ) -> Result<(), &'static str> {
+            Ok(())
+        }
+        async fn on_data(
+            &self,
+            _client: &mut ClientConnection,
+            _packet: &PacketV1,
+        ) -> Result<(), &'static str> {
+            Ok(())
+        }
+        async fn on_disconnect(
+            &self,
+            _client: &mut ClientConnection,
+            _packet: &PacketV1,
+        ) -> Result<(), &'static str> {
+            Ok(())
+        }
+        async fn on_ping(
+            &self,
+            _client: &mut ClientConnection,
+            _packet: &PacketV1,
+        ) -> Result<(), &'static str> {
+            Ok(())
+        }
+
+        async fn on_rmc_request(
+            &self,
+            _client: &mut ClientConnection,
+            _rmc_request: &RMCRequest,
+        ) -> Result<(), &'static str> {
+            Ok(())
+        }
+    }
+
+    #[async_trait(?Send)]
+    impl Server for TestServer {
+        fn get_base(&self) -> &BaseServer {
+            &self.base
+        }
+        fn get_mut_base(&mut self) -> &mut BaseServer {
+            &mut self.base
+        }
+    }
+
+    async fn get_server_with_client(client: ClientConnection) -> TestServer {
+        let server = TestServer::default();
+        let client_mutex = server.get_clients();
+        let mut clients = client_mutex.lock().await;
+        clients.push(client);
+
+        server
+    }
+
+    #[tokio::test]
+    #[ntest::timeout(5000)]
+    async fn should_not_deadlock_when_handling_disconnect_message() {
+        // Set up client
+        let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080);
+        let mut client = ClientConnection::new(addr, ClientContext::default());
+        client.set_is_connected(true);
+
+        // Get server with client
+        let server = get_server_with_client(client).await;
+
+        // Set up packet
+        let mut disconnect_packet = PacketV1::new_disconnect_packet();
+        let mut flags = disconnect_packet.get_flags();
+        // Prevent ack response from server for test
+        flags.clear_flag(PacketFlag::NeedsAck);
+        disconnect_packet.set_flags(flags);
+        let packet_bytes = disconnect_packet.to_bytes(4, &SignatureContext::default());
+
+        // Handle disconnect
+        server
+            .handle_socket_message(packet_bytes, addr)
+            .await
+            .unwrap();
+
+        let client_mutex = server.get_clients();
+        let clients = client_mutex.lock().await;
+        assert_eq!(clients.len(), 0);
     }
 }

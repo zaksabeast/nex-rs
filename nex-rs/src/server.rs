@@ -222,24 +222,24 @@ pub trait Server: EventHandler {
     ) -> Result<(), &'static str> {
         match packet.get_packet_type() {
             PacketType::Syn => {
-                self.on_syn(client, &packet).await?;
+                self.on_syn(client, packet).await?;
             }
             PacketType::Connect => {
-                self.on_connect(client, &packet).await?;
+                self.on_connect(client, packet).await?;
             }
             PacketType::Disconnect => {
-                self.on_disconnect(client, &packet).await?;
+                self.on_disconnect(client, packet).await?;
             }
             PacketType::Data => {
-                self.on_data(client, &packet).await?;
+                self.on_data(client, packet).await?;
 
-                if client.can_decode_rmc_request(&packet) {
-                    let rmc_request = client.decode_rmc_request(&packet)?;
+                if client.can_decode_rmc_request(packet) {
+                    let rmc_request = client.decode_rmc_request(packet)?;
                     self.on_rmc_request(client, &rmc_request).await?;
                 }
             }
             PacketType::Ping => {
-                self.on_ping(client, &packet).await?;
+                self.on_ping(client, packet).await?;
             }
         };
 
@@ -260,7 +260,7 @@ pub trait Server: EventHandler {
             return true;
         }
 
-        return false;
+        false
     }
 
     fn handle_connection_init(&self, client: &mut ClientConnection, packet: &PacketV1) {
@@ -369,7 +369,7 @@ pub trait Server: EventHandler {
             return true;
         }
 
-        return false;
+        false
     }
 
     async fn acknowledge_packet(
@@ -385,7 +385,7 @@ pub trait Server: EventHandler {
             && (packet_type != PacketType::Connect
                 || (packet_type == PacketType::Connect && payload.is_empty()))
         {
-            self.send_acknowledge_packet(&packet, client, None).await?;
+            self.send_acknowledge_packet(packet, client, None).await?;
         }
 
         Ok(())

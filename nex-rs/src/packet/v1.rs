@@ -156,13 +156,10 @@ impl PacketV1 {
     ) -> PacketResult<Self> {
         let data_len = data.len();
 
-        let mut packet = Self {
-            base: BasePacket::new(data),
-            ..Default::default()
-        };
+        let mut packet = Self::default();
 
         if data_len > 0 {
-            packet.decode(flags_version, context)?;
+            packet.decode(data, flags_version, context)?;
         }
 
         Ok(packet)
@@ -196,9 +193,13 @@ impl PacketV1 {
         self.maximum_substream_id = value;
     }
 
-    fn decode(&mut self, flags_version: u32, context: &SignatureContext) -> PacketResult<()> {
-        let data_len = self.base.data.len();
-        let data = self.base.data.clone();
+    fn decode(
+        &mut self,
+        data: Vec<u8>,
+        flags_version: u32,
+        context: &SignatureContext,
+    ) -> PacketResult<()> {
+        let data_len = data.len();
 
         // magic + header + signature
         if data_len < 30 {

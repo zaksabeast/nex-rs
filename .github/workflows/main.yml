@@ -1,4 +1,4 @@
-name: Lint and test
+name: Code checks
 
 on:
   pull_request:
@@ -10,7 +10,7 @@ jobs:
   check-format:
     name: Check format
     runs-on: ubuntu-latest
-    container: rust:nightly-slim
+    container: rustlang/rust:nightly-slim
     steps:
       - name: Checkout code
         uses: actions/checkout@v2

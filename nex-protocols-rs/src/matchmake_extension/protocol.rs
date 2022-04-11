@@ -1,10 +1,12 @@
 use crate::matchmake_extension::MatchmakeSessionSearchCriteria;
 use async_trait::async_trait;
-use nex_rs::client::ClientConnection;
-use nex_rs::nex_types::{ResultCode, ResultRange};
-use nex_rs::result::NexResult;
-use nex_rs::rmc::RMCRequest;
-use nex_rs::server::Server;
+use nex_rs::{
+    client::ClientConnection,
+    nex_types::{ResultCode, ResultRange},
+    result::NexResult,
+    rmc::RMCRequest,
+    server::Server,
+};
 use no_std_io::{StreamContainer, StreamReader};
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 

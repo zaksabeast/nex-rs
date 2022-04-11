@@ -1,125 +1,14 @@
-use crate::counter::Counter;
+use super::{BaseServer, Error, EventHandler, ServerResult};
 use crate::{
-    client::{ClientConnection, ClientContext},
+    client::ClientConnection,
     packet::{Packet, PacketFlag, PacketType, PacketV1},
-    result::{Error as NexError, NexResult},
-    rmc::RMCRequest,
+    result::NexResult,
 };
 use async_trait::async_trait;
-use getset::{CopyGetters, Getters, Setters};
 use no_std_io::{StreamContainer, StreamWriter};
 use rand::RngCore;
-use snafu::Snafu;
-use std::net::SocketAddr;
-use std::sync::Arc;
-use std::time::Duration;
-use tokio::net::UdpSocket;
-use tokio::sync::Mutex;
-use tokio::task::JoinHandle;
-use tokio::time;
-
-#[derive(Debug, PartialEq, Snafu)]
-pub enum Error {
-    #[snafu()]
-    NoSocket,
-    #[snafu()]
-    CouldNoBindToAddress,
-    #[snafu()]
-    DataReceiveError,
-    #[snafu()]
-    DataSendError,
-    #[snafu(display(
-        "Tried to send too many fragments to {}: sequence_id 0x{:02x}, fragment_id 0x{:x}",
-        client_addr,
-        sequence_id,
-        fragment_id,
-    ))]
-    TooManyFragments {
-        client_addr: SocketAddr,
-        sequence_id: u16,
-        fragment_id: usize,
-    },
-}
-
-pub type ServerResult<T> = Result<T, Error>;
-
-#[async_trait(?Send)]
-pub trait EventHandler {
-    async fn on_syn(&self, client: &mut ClientConnection, packet: &PacketV1) -> NexResult<()>;
-    async fn on_connect(&self, client: &mut ClientConnection, packet: &PacketV1) -> NexResult<()>;
-    async fn on_data(&self, client: &mut ClientConnection, packet: &PacketV1) -> NexResult<()>;
-    async fn on_disconnect(
-        &self,
-        client: &mut ClientConnection,
-        packet: &PacketV1,
-    ) -> NexResult<()>;
-    async fn on_ping(&self, client: &mut ClientConnection, packet: &PacketV1) -> NexResult<()>;
-
-    async fn on_rmc_request(
-        &self,
-        client: &mut ClientConnection,
-        rmc_request: &RMCRequest,
-    ) -> NexResult<()>;
-    async fn on_error(&self, error: NexError);
-}
-
-#[derive(Debug, Getters, CopyGetters, Setters)]
-#[getset(skip)]
-pub struct ServerSettings {
-    #[getset(set = "pub")]
-    access_key: String,
-    #[getset(set = "pub")]
-    nex_version: u32,
-    #[getset(set = "pub")]
-    prudp_version: u32,
-    #[getset(set = "pub")]
-    fragment_size: u16,
-    flags_version: u32,
-    #[getset(set = "pub")]
-    ping_timeout: u32,
-    checksum_version: u32,
-}
-
-impl ServerSettings {
-    pub fn create_client_context(&self) -> ClientContext {
-        ClientContext::new(self.flags_version, self.prudp_version, &self.access_key)
-    }
-}
-
-impl Default for ServerSettings {
-    fn default() -> Self {
-        Self {
-            access_key: "".to_string(),
-            nex_version: 0,
-            prudp_version: 1,
-            fragment_size: 1300,
-            ping_timeout: 5,
-            flags_version: 1,
-            checksum_version: 1,
-        }
-    }
-}
-
-#[derive(Default)]
-pub struct BaseServer {
-    settings: ServerSettings,
-    socket: Option<UdpSocket>,
-    pub connection_id_counter: Counter,
-    ping_kick_thread: Option<JoinHandle<()>>,
-    clients: Arc<Mutex<Vec<ClientConnection>>>,
-}
-
-impl BaseServer {
-    pub fn new(settings: ServerSettings) -> Self {
-        Self {
-            settings,
-            socket: None,
-            connection_id_counter: Counter::new(10),
-            ping_kick_thread: None,
-            clients: Arc::new(Mutex::new(vec![])),
-        }
-    }
-}
+use std::{net::SocketAddr, sync::Arc, time::Duration};
+use tokio::{net::UdpSocket, sync::Mutex, time};
 
 #[async_trait(?Send)]
 pub trait Server: EventHandler {
@@ -535,7 +424,9 @@ pub trait Server: EventHandler {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::packet::SignatureContext;
+    use crate::{
+        client::ClientContext, packet::SignatureContext, result::Error as NexError, rmc::RMCRequest,
+    };
     use std::net::{IpAddr, Ipv4Addr};
 
     #[derive(Default)]

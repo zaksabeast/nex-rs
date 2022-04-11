@@ -1,38 +1,15 @@
+use super::types::AuthenticationInfo;
 use async_trait::async_trait;
-use nex_rs::client::ClientConnection;
-use nex_rs::nex_types::{DataHolder, NexString, ResultCode};
-use nex_rs::result::NexResult;
-use nex_rs::rmc::RMCRequest;
-use nex_rs::server::Server;
-use no_std_io::{EndianRead, EndianWrite, StreamContainer, StreamReader};
-use num_enum::{IntoPrimitive, TryFromPrimitive};
+use nex_rs::{
+    client::ClientConnection,
+    nex_types::{DataHolder, NexString, ResultCode},
+    result::NexResult,
+    rmc::RMCRequest,
+    server::Server,
+};
+use no_std_io::{StreamContainer, StreamReader};
 
 pub const AUTHENTICATION_PROTOCOL_ID: u8 = 0xA;
-
-#[derive(Debug, Clone, Copy, PartialEq, TryFromPrimitive, IntoPrimitive)]
-#[repr(u32)]
-pub enum TicketGrantingMethod {
-    Login = 0x1,
-    LoginEx = 0x2,
-    RequestTicket = 0x3,
-    GetPID = 0x4,
-    GetName = 0x5,
-    LoginWithParam = 0x6,
-}
-
-#[derive(Debug, Default, EndianRead, EndianWrite)]
-pub struct AuthenticationInfo {
-    token: NexString,
-    ngs_version: u32,
-    token_type: u8,
-    server_version: u32,
-}
-
-impl AuthenticationInfo {
-    pub fn new() -> Self {
-        Self::default()
-    }
-}
 
 #[async_trait(?Send)]
 pub trait TicketGrantingProtocol: Server {

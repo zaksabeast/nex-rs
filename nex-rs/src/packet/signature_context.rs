@@ -1,4 +1,4 @@
-use crate::md5;
+use crate::crypto::md5;
 use getset::{CopyGetters, Getters, Setters};
 
 #[derive(Clone, Default, CopyGetters, Getters, Setters)]

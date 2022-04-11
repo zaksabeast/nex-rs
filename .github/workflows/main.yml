@@ -1,4 +1,4 @@
-name: Lint and test
+name: Code checks
 
 on:
   pull_request:
@@ -7,7 +7,21 @@ on:
       - "main"
 
 jobs:
-  lint-test-build:
+  check-format:
+    name: Check format
+    runs-on: ubuntu-latest
+    container: rustlang/rust:nightly-slim
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Install tools
+        run: rustup component add rustfmt
+
+      - name: Format check
+        run: cargo +nightly fmt --check
+
+  lint-test:
     name: Lint and test
     runs-on: ubuntu-latest
     container: rust:slim
@@ -16,12 +30,7 @@ jobs:
         uses: actions/checkout@v2
 
       - name: Install tools
-        run: |
-          rustup component add clippy
-          rustup component add rustfmt
-
-      - name: Format check
-        run: cargo fmt --check
+        run: rustup component add clippy
 
       - name: Lint
         run: cargo clippy -- -D warnings

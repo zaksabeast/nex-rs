@@ -1,9 +1,8 @@
 use async_trait::async_trait;
-use nex_rs::client::ClientConnection;
-use nex_rs::nex_types::ResultCode;
-use nex_rs::result::NexResult;
-use nex_rs::rmc::RMCRequest;
-use nex_rs::server::Server;
+use nex_rs::{
+    client::ClientConnection, nex_types::ResultCode, result::NexResult, rmc::RMCRequest,
+    server::Server,
+};
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 
 pub const USUM_117_PROTOCOL_ID: u8 = 0x75;

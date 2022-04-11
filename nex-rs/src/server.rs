@@ -169,7 +169,7 @@ pub trait Server: EventHandler {
         self.get_base().socket.as_ref().ok_or(Error::NoSocket)
     }
 
-    async fn listen(&mut self, addr: &str) -> NexResult<()> {
+    async fn listen(&mut self, addr: &str) -> ServerResult<()> {
         let socket = UdpSocket::bind(addr)
             .await
             .map_err(|_| Error::CouldNoBindToAddress)?;
@@ -214,12 +214,9 @@ pub trait Server: EventHandler {
         }
     }
 
-    async fn receive_data(&self) -> NexResult<(Vec<u8>, SocketAddr)> {
+    async fn receive_data(&self) -> ServerResult<(Vec<u8>, SocketAddr)> {
         let mut buf: Vec<u8> = vec![0; 0x1000];
-        let socket = match &self.get_base().socket {
-            Some(socket) => Ok(socket),
-            None => Err(Error::NoSocket),
-        }?;
+        let socket = &self.get_base().socket.as_ref().ok_or(Error::NoSocket)?;
 
         let (receive_size, peer) = socket
             .recv_from(&mut buf)
@@ -373,7 +370,7 @@ pub trait Server: EventHandler {
         }
     }
 
-    async fn send_ping(&self, client: &mut ClientConnection) -> NexResult<()> {
+    async fn send_ping(&self, client: &mut ClientConnection) -> ServerResult<()> {
         self.send(client, PacketV1::new_ping_packet()).await
     }
 
@@ -469,7 +466,7 @@ pub trait Server: EventHandler {
         method_id: MethodId,
         call_id: u32,
         data: Data,
-    ) -> NexResult<()> {
+    ) -> ServerResult<()> {
         let packet = client.new_rmc_success(protocol_id, method_id, call_id, data);
         self.send(client, packet).await
     }
@@ -481,12 +478,12 @@ pub trait Server: EventHandler {
         method_id: MethodId,
         call_id: u32,
         error_code: u32,
-    ) -> NexResult<()> {
+    ) -> ServerResult<()> {
         let packet = client.new_rmc_error(protocol_id, method_id, call_id, error_code);
         self.send(client, packet).await
     }
 
-    async fn send(&self, client: &mut ClientConnection, mut packet: PacketV1) -> NexResult<()> {
+    async fn send(&self, client: &mut ClientConnection, mut packet: PacketV1) -> ServerResult<()> {
         let fragment_size: usize = self.get_base().settings.fragment_size.into();
         let data = packet.get_payload().to_vec();
         let fragment_count = data.len() / fragment_size;
@@ -519,7 +516,7 @@ pub trait Server: EventHandler {
         client: &mut ClientConnection,
         packet: &mut PacketV1,
         fragment_id: u8,
-    ) -> NexResult<usize> {
+    ) -> ServerResult<usize> {
         let compressed_data = self.compress_packet(packet.get_payload());
         let sequence_id = client.increment_sequence_id_out();
 
@@ -531,12 +528,12 @@ pub trait Server: EventHandler {
         self.send_raw(client, &encoded_packet).await
     }
 
-    async fn send_raw(&self, client: &ClientConnection, data: &[u8]) -> NexResult<usize> {
+    async fn send_raw(&self, client: &ClientConnection, data: &[u8]) -> ServerResult<usize> {
         let socket = self.get_socket()?;
         socket
             .send_to(data, client.get_address())
             .await
-            .map_err(|_| Error::DataSendError.into())
+            .map_err(|_| Error::DataSendError)
     }
 
     fn compress_packet(&self, data: &[u8]) -> Vec<u8> {

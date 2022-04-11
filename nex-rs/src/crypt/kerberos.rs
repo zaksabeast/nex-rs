@@ -59,9 +59,9 @@ pub fn derive_kerberos_key(principal_id: u32, password: &[u8]) -> [u8; 16] {
     // This is a bit awkward, but it allows
     // key to be an array with a known size
     // without dropping temporary values
-    let mut key = crate::md5::hash(password);
+    let mut key = super::md5::hash(password);
     for _ in 0..(hash_count - 1) {
-        key = crate::md5::hash(&key);
+        key = super::md5::hash(&key);
     }
 
     key

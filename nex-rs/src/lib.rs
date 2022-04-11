@@ -1,7 +1,6 @@
 pub mod client;
 pub mod counter;
 pub mod crypt;
-pub mod md5;
 pub mod nex_types;
 pub mod packet;
 pub mod result;

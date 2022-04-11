@@ -1,12 +1,52 @@
 use crate::{
     counter::Counter,
-    packet::{Packet, PacketType, PacketV1, SignatureContext},
+    crypt_result::{self, CryptResult},
+    packet::{Packet, PacketResult, PacketType, PacketV1, SignatureContext},
     rc4::Rc4,
     rmc::{RMCRequest, RMCResponse},
 };
 use getset::{CopyGetters, Getters};
 use no_std_io::Reader;
+use snafu::Snafu;
 use std::net::SocketAddr;
+
+#[derive(Debug, PartialEq, Snafu)]
+pub enum Error {
+    #[snafu(display(
+        "Invalid crypt operation: {}",
+        error.to_string()
+    ))]
+    CryptError { error: crypt_result::Error },
+    #[snafu(display(
+        "Invalid packet read for PacketType::{:?}, sequence_id: 0x{:02x}: {}",
+        packet_type,
+        sequence_id,
+        message,
+    ))]
+    InvalidPacketRead {
+        packet_type: PacketType,
+        sequence_id: u16,
+        message: String,
+    },
+    #[snafu(display("Error: {}", message))]
+    Generic { message: String },
+}
+
+impl From<crypt_result::Error> for Error {
+    fn from(error: crypt_result::Error) -> Self {
+        Self::CryptError { error }
+    }
+}
+
+impl From<&str> for Error {
+    fn from(message: &str) -> Self {
+        Self::Generic {
+            message: message.to_string(),
+        }
+    }
+}
+
+pub type ClientConnectionResult<T> = Result<T, Error>;
 
 #[derive(Clone, CopyGetters, Getters)]
 #[getset(skip)]
@@ -35,11 +75,11 @@ impl ClientContext {
         }
     }
 
-    pub fn encrypt(&mut self, data: &[u8]) -> Result<Vec<u8>, &'static str> {
+    pub fn encrypt(&mut self, data: &[u8]) -> CryptResult<Vec<u8>> {
         self.cipher.encrypt(data)
     }
 
-    pub fn decrypt(&mut self, data: &[u8]) -> Result<Vec<u8>, &'static str> {
+    pub fn decrypt(&mut self, data: &[u8]) -> CryptResult<Vec<u8>> {
         self.decipher.decrypt(data)
     }
 
@@ -64,25 +104,27 @@ impl ClientContext {
             .expect("Sequence id out does not fit into u16")
     }
 
-    fn can_decrypt_packet(&self, packet: &PacketV1) -> Result<(), &'static str> {
+    fn can_decrypt_packet(&self, packet: &PacketV1) -> ClientConnectionResult<()> {
         if packet.get_packet_type() != PacketType::Data {
-            return Err("Only data packets can have payloads");
+            return Err("Only data packets can have payloads".into());
         }
 
         if packet.get_flags().multi_ack() {
-            return Err("Ack packets can not hold payloads");
+            return Err("Ack packets can not hold payloads".into());
         }
 
         if packet.get_sequence_id() != self.get_sequence_id_in() {
-            return Err("Tried to decode a packet out of order");
+            return Err("Tried to decode a packet out of order".into());
         }
 
         Ok(())
     }
 
-    fn decrypt_packet(&mut self, packet: &PacketV1) -> Result<Vec<u8>, &'static str> {
+    fn decrypt_packet(&mut self, packet: &PacketV1) -> ClientConnectionResult<Vec<u8>> {
         self.can_decrypt_packet(packet)?;
-        self.decipher.decrypt(packet.get_payload())
+        self.decipher
+            .decrypt(packet.get_payload())
+            .map_err(|error| error.into())
     }
 
     fn can_encrypt_packet(&self, packet: &PacketV1) -> Result<(), &'static str> {
@@ -151,7 +193,7 @@ impl ClientConnection {
         packet.to_bytes(self.context.flags_version, &self.context.signature_context)
     }
 
-    pub fn read_packet(&mut self, data: Vec<u8>) -> Result<PacketV1, &'static str> {
+    pub fn read_packet(&mut self, data: Vec<u8>) -> PacketResult<PacketV1> {
         PacketV1::read_packet(
             data,
             self.context.flags_version,
@@ -290,10 +332,12 @@ impl ClientConnection {
         self.context.can_decrypt_packet(packet).is_ok()
     }
 
-    pub fn decode_rmc_request(&mut self, packet: &PacketV1) -> Result<RMCRequest, &'static str> {
+    pub fn decode_rmc_request(&mut self, packet: &PacketV1) -> ClientConnectionResult<RMCRequest> {
         let payload = self.context.decrypt_packet(packet)?;
-        payload
-            .read_le(0)
-            .map_err(|_| "Cannot read rmc request from payload")
+        payload.read_le(0).map_err(|_| Error::InvalidPacketRead {
+            packet_type: packet.get_packet_type(),
+            sequence_id: packet.get_sequence_id(),
+            message: "Cannot read rmc request from payload".into(),
+        })
     }
 }

@@ -1,6 +1,7 @@
 use async_trait::async_trait;
 use nex_rs::client::ClientConnection;
 use nex_rs::nex_types::{DataHolder, NexString, ResultCode};
+use nex_rs::result::NexResult;
 use nex_rs::rmc::RMCRequest;
 use nex_rs::server::Server;
 use no_std_io::{EndianRead, EndianWrite, StreamContainer, StreamReader};
@@ -68,7 +69,7 @@ pub trait TicketGrantingProtocol: Server {
         &self,
         client: &mut ClientConnection,
         request: &RMCRequest,
-    ) -> Result<(), &'static str> {
+    ) -> NexResult<()> {
         let parameters = request.parameters.as_slice();
         let mut parameters_stream = StreamContainer::new(parameters);
 
@@ -78,7 +79,7 @@ pub trait TicketGrantingProtocol: Server {
             .into();
 
         if username.trim().is_empty() {
-            return Err("Failed to read username");
+            return Err("Failed to read username".into());
         }
 
         match self.login(client, username).await {
@@ -110,7 +111,7 @@ pub trait TicketGrantingProtocol: Server {
         &self,
         client: &mut ClientConnection,
         request: &RMCRequest,
-    ) -> Result<(), &'static str> {
+    ) -> NexResult<()> {
         let parameters = request.parameters.as_slice();
         let mut parameters_stream = StreamContainer::new(parameters);
 
@@ -120,7 +121,7 @@ pub trait TicketGrantingProtocol: Server {
             .into();
 
         if username.trim().is_empty() {
-            return Err("Failed to read username");
+            return Err("Failed to read username".into());
         }
 
         let data_holder = parameters_stream
@@ -130,7 +131,7 @@ pub trait TicketGrantingProtocol: Server {
         let data_holder_name: String = data_holder.get_name().into();
 
         if data_holder_name != "AuthenticationInfo" {
-            return Err("Data holder name mismatch");
+            return Err("Data holder name mismatch".into());
         }
 
         match self
@@ -165,10 +166,10 @@ pub trait TicketGrantingProtocol: Server {
         &self,
         client: &mut ClientConnection,
         request: &RMCRequest,
-    ) -> Result<(), &'static str> {
+    ) -> NexResult<()> {
         let parameters = request.parameters.as_slice();
         if parameters.len() != 8 {
-            return Err("[TicketGrantingProtocol::request_ticket] Parameters length not 8");
+            return Err("[TicketGrantingProtocol::request_ticket] Parameters length not 8".into());
         }
 
         let mut parameters_stream = StreamContainer::new(parameters);
@@ -209,7 +210,7 @@ pub trait TicketGrantingProtocol: Server {
         &self,
         client: &mut ClientConnection,
         request: &RMCRequest,
-    ) -> Result<(), &'static str> {
+    ) -> NexResult<()> {
         let parameters = request.parameters.as_slice();
         let mut parameters_stream = StreamContainer::new(parameters);
         let username: String = parameters_stream
@@ -218,7 +219,7 @@ pub trait TicketGrantingProtocol: Server {
             .into();
 
         if username.trim().is_empty() {
-            return Err("[TicketGrantingProtocol::get_pid] Failed to read username");
+            return Err("[TicketGrantingProtocol::get_pid] Failed to read username".into());
         }
 
         match self.get_pid(client, username).await {
@@ -250,11 +251,11 @@ pub trait TicketGrantingProtocol: Server {
         &self,
         client: &mut ClientConnection,
         request: &RMCRequest,
-    ) -> Result<(), &'static str> {
+    ) -> NexResult<()> {
         let parameters = request.parameters.as_slice();
 
         if parameters.len() != 4 {
-            return Err("[TicketGrantingProtocol::get_name] Parameters length not 4");
+            return Err("[TicketGrantingProtocol::get_name] Parameters length not 4".into());
         }
 
         let mut parameters_stream = StreamContainer::new(parameters);

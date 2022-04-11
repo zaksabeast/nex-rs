@@ -1,3 +1,4 @@
+use crate::crypt_result::CryptResult;
 use crypto::{
     buffer::{RefReadBuffer, RefWriteBuffer},
     rc4,
@@ -16,24 +17,20 @@ impl Rc4 {
         }
     }
 
-    pub fn encrypt(&mut self, data: &[u8]) -> Result<Vec<u8>, &'static str> {
+    pub fn encrypt(&mut self, data: &[u8]) -> CryptResult<Vec<u8>> {
         let mut out = vec![0; data.len()];
         let mut out_buf = RefWriteBuffer::new(&mut out);
         let mut in_buf = RefReadBuffer::new(data);
-        self.inner
-            .encrypt(&mut in_buf, &mut out_buf, true)
-            .map_err(|_| "Encrypt failed")?;
+        self.inner.encrypt(&mut in_buf, &mut out_buf, true)?;
 
         Ok(out)
     }
 
-    pub fn decrypt(&mut self, data: &[u8]) -> Result<Vec<u8>, &'static str> {
+    pub fn decrypt(&mut self, data: &[u8]) -> CryptResult<Vec<u8>> {
         let mut out = vec![0; data.len()];
         let mut out_buf = RefWriteBuffer::new(&mut out);
         let mut in_buf = RefReadBuffer::new(data);
-        self.inner
-            .decrypt(&mut in_buf, &mut out_buf, true)
-            .map_err(|_| "Decrypt failed")?;
+        self.inner.decrypt(&mut in_buf, &mut out_buf, true)?;
 
         Ok(out)
     }

@@ -2,6 +2,7 @@ use crate::matchmake_extension::MatchmakeSessionSearchCriteria;
 use async_trait::async_trait;
 use nex_rs::client::ClientConnection;
 use nex_rs::nex_types::{ResultCode, ResultRange};
+use nex_rs::result::NexResult;
 use nex_rs::rmc::RMCRequest;
 use nex_rs::server::Server;
 use no_std_io::{StreamContainer, StreamReader};
@@ -58,7 +59,7 @@ pub trait MatchmakeExtensionProtocol: Server {
         &self,
         client: &mut ClientConnection,
         request: &RMCRequest,
-    ) -> Result<(), &'static str> {
+    ) -> NexResult<()> {
         let parameters = request.parameters.as_slice();
         let mut parameters_stream = StreamContainer::new(parameters);
 
@@ -95,7 +96,7 @@ pub trait MatchmakeExtensionProtocol: Server {
         &self,
         client: &mut ClientConnection,
         request: &RMCRequest,
-    ) -> Result<(), &'static str> {
+    ) -> NexResult<()> {
         let parameters = request.parameters.as_slice();
         let mut parameters_stream = StreamContainer::new(parameters);
 
@@ -132,7 +133,7 @@ pub trait MatchmakeExtensionProtocol: Server {
         &self,
         client: &mut ClientConnection,
         request: &RMCRequest,
-    ) -> Result<(), &'static str> {
+    ) -> NexResult<()> {
         let parameters = request.parameters.as_slice();
         let mut parameters_stream = StreamContainer::new(parameters);
 
@@ -176,7 +177,7 @@ pub trait MatchmakeExtensionProtocol: Server {
         &self,
         client: &mut ClientConnection,
         request: &RMCRequest,
-    ) -> Result<(), &'static str> {
+    ) -> NexResult<()> {
         let parameters = request.parameters.as_slice();
         let mut parameters_stream = StreamContainer::new(parameters);
 
@@ -224,7 +225,7 @@ pub trait MatchmakeExtensionProtocol: Server {
         &self,
         client: &mut ClientConnection,
         request: &RMCRequest,
-    ) -> Result<(), &'static str> {
+    ) -> NexResult<()> {
         match self.get_attraction_status(client).await {
             Ok(data) => {
                 self.send_success(
@@ -254,7 +255,7 @@ pub trait MatchmakeExtensionProtocol: Server {
         &self,
         client: &mut ClientConnection,
         request: &RMCRequest,
-    ) -> Result<(), &'static str> {
+    ) -> NexResult<()> {
         let parameters = request.parameters.as_slice();
         let mut parameters_stream = StreamContainer::new(parameters);
 

@@ -1,6 +1,7 @@
 use async_trait::async_trait;
 use nex_rs::client::ClientConnection;
 use nex_rs::nex_types::ResultCode;
+use nex_rs::result::NexResult;
 use nex_rs::rmc::RMCRequest;
 use nex_rs::server::Server;
 use num_enum::{IntoPrimitive, TryFromPrimitive};
@@ -26,7 +27,7 @@ pub trait HealthProtocol: Server {
         &self,
         client: &mut ClientConnection,
         request: &RMCRequest,
-    ) -> Result<(), &'static str> {
+    ) -> NexResult<()> {
         match self.ping_daemon(client).await {
             Ok(data) => {
                 self.send_success(
@@ -56,7 +57,7 @@ pub trait HealthProtocol: Server {
         &self,
         client: &mut ClientConnection,
         request: &RMCRequest,
-    ) -> Result<(), &'static str> {
+    ) -> NexResult<()> {
         match self.ping_database(client).await {
             Ok(data) => {
                 self.send_success(
@@ -86,7 +87,7 @@ pub trait HealthProtocol: Server {
         &self,
         client: &mut ClientConnection,
         request: &RMCRequest,
-    ) -> Result<(), &'static str> {
+    ) -> NexResult<()> {
         match self.run_sanity_check(client).await {
             Ok(data) => {
                 self.send_success(
@@ -116,7 +117,7 @@ pub trait HealthProtocol: Server {
         &self,
         client: &mut ClientConnection,
         request: &RMCRequest,
-    ) -> Result<(), &'static str> {
+    ) -> NexResult<()> {
         match self.fix_sanity_errors(client).await {
             Ok(data) => {
                 self.send_success(

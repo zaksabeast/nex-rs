@@ -8,6 +8,7 @@ use crate::datastore_usum::{
 use async_trait::async_trait;
 use nex_rs::client::ClientConnection;
 use nex_rs::nex_types::{NexList, NexStruct, ResultCode};
+use nex_rs::result::NexResult;
 use nex_rs::rmc::RMCRequest;
 use nex_rs::server::Server;
 use no_std_io::{StreamContainer, StreamReader};
@@ -101,7 +102,7 @@ pub trait DataStoreProtocol: Server {
         &self,
         client: &mut ClientConnection,
         request: &RMCRequest,
-    ) -> Result<(), &'static str> {
+    ) -> NexResult<()> {
         let parameters = request.parameters.as_slice();
 
         let mut parameters_stream = StreamContainer::new(parameters);
@@ -142,7 +143,7 @@ pub trait DataStoreProtocol: Server {
         &self,
         client: &mut ClientConnection,
         request: &RMCRequest,
-    ) -> Result<(), &'static str> {
+    ) -> NexResult<()> {
         let parameters = request.parameters.as_slice();
 
         let mut parameters_stream = StreamContainer::new(parameters);
@@ -186,7 +187,7 @@ pub trait DataStoreProtocol: Server {
         &self,
         client: &mut ClientConnection,
         request: &RMCRequest,
-    ) -> Result<(), &'static str> {
+    ) -> NexResult<()> {
         let parameters = request.parameters.as_slice();
 
         let mut parameters_stream = StreamContainer::new(parameters);
@@ -224,7 +225,7 @@ pub trait DataStoreProtocol: Server {
         &self,
         client: &mut ClientConnection,
         request: &RMCRequest,
-    ) -> Result<(), &'static str> {
+    ) -> NexResult<()> {
         let parameters = request.parameters.as_slice();
 
         let mut parameters_stream = StreamContainer::new(parameters);
@@ -262,7 +263,7 @@ pub trait DataStoreProtocol: Server {
         &self,
         client: &mut ClientConnection,
         request: &RMCRequest,
-    ) -> Result<(), &'static str> {
+    ) -> NexResult<()> {
         match self.prepare_upload_pokemon(client).await {
             Ok(data) => {
                 self.send_success(
@@ -292,7 +293,7 @@ pub trait DataStoreProtocol: Server {
         &self,
         client: &mut ClientConnection,
         request: &RMCRequest,
-    ) -> Result<(), &'static str> {
+    ) -> NexResult<()> {
         let parameters = request.parameters.as_slice();
 
         let mut parameters_stream = StreamContainer::new(parameters);
@@ -330,7 +331,7 @@ pub trait DataStoreProtocol: Server {
         &self,
         client: &mut ClientConnection,
         request: &RMCRequest,
-    ) -> Result<(), &'static str> {
+    ) -> NexResult<()> {
         let parameters = request.parameters.as_slice();
 
         let mut parameters_stream = StreamContainer::new(parameters);
@@ -368,7 +369,7 @@ pub trait DataStoreProtocol: Server {
         &self,
         client: &mut ClientConnection,
         request: &RMCRequest,
-    ) -> Result<(), &'static str> {
+    ) -> NexResult<()> {
         let parameters = request.parameters.as_slice();
 
         let mut parameters_stream = StreamContainer::new(parameters);
@@ -406,7 +407,7 @@ pub trait DataStoreProtocol: Server {
         &self,
         client: &mut ClientConnection,
         request: &RMCRequest,
-    ) -> Result<(), &'static str> {
+    ) -> NexResult<()> {
         let parameters = request.parameters.as_slice();
 
         let mut parameters_stream = StreamContainer::new(parameters);
@@ -444,7 +445,7 @@ pub trait DataStoreProtocol: Server {
         &self,
         client: &mut ClientConnection,
         request: &RMCRequest,
-    ) -> Result<(), &'static str> {
+    ) -> NexResult<()> {
         let parameters = request.parameters.as_slice();
 
         let mut parameters_stream = StreamContainer::new(parameters);
@@ -482,7 +483,7 @@ pub trait DataStoreProtocol: Server {
         &self,
         client: &mut ClientConnection,
         request: &RMCRequest,
-    ) -> Result<(), &'static str> {
+    ) -> NexResult<()> {
         let parameters = request.parameters.as_slice();
 
         let mut parameters_stream = StreamContainer::new(parameters);
@@ -520,7 +521,7 @@ pub trait DataStoreProtocol: Server {
         &self,
         client: &mut ClientConnection,
         request: &RMCRequest,
-    ) -> Result<(), &'static str> {
+    ) -> NexResult<()> {
         let parameters = request.parameters.as_slice();
 
         let mut parameters_stream = StreamContainer::new(parameters);

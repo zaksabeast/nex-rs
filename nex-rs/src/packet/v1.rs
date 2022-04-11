@@ -1,5 +1,6 @@
 use super::{
-    BasePacket, Packet, PacketFlag, PacketFlags, PacketOption, PacketType, SignatureContext,
+    BasePacket, Error, Packet, PacketFlag, PacketFlags, PacketOption, PacketResult, PacketType,
+    SignatureContext,
 };
 use hmac::{Hmac, Mac};
 use md5::Md5;
@@ -63,15 +64,13 @@ impl Packet for PacketV1 {
         stream.checked_write_stream_le(&self.substream_id);
         stream.checked_write_stream_le(&self.base.sequence_id);
 
-        let header = &stream.get_slice()[2..14];
         let signature = Self::calculate_signature(
-            header,
+            &stream.get_slice()[2..14].try_into().unwrap(),
             &self.base.payload,
             context.client_connection_signature(),
             &options,
             context,
-        )
-        .expect("Signature could not be calculated");
+        );
 
         stream.checked_write_stream_bytes(&signature);
 
@@ -154,7 +153,7 @@ impl PacketV1 {
         data: Vec<u8>,
         flags_version: u32,
         context: &SignatureContext,
-    ) -> Result<Self, &'static str> {
+    ) -> PacketResult<Self> {
         let data_len = data.len();
 
         let mut packet = Self {
@@ -197,17 +196,17 @@ impl PacketV1 {
         self.maximum_substream_id = value;
     }
 
-    fn decode(
-        &mut self,
-        flags_version: u32,
-        context: &SignatureContext,
-    ) -> Result<(), &'static str> {
+    fn decode(&mut self, flags_version: u32, context: &SignatureContext) -> PacketResult<()> {
         let data_len = self.base.data.len();
         let data = self.base.data.clone();
 
         // magic + header + signature
         if data_len < 30 {
-            return Err("Packet length is too small!");
+            return Err(Error::InvalidSize {
+                wanted_size: 30,
+                received_size: data_len,
+                context: "Data length is less than the smallest possible packet size",
+            });
         }
 
         let mut stream = StreamContainer::new(data.as_slice());
@@ -215,12 +214,12 @@ impl PacketV1 {
         self.magic = stream.default_read_stream_le();
 
         if self.magic != 0xd0ea {
-            return Err("Invalid magic");
+            return Err(Error::InvalidMagic { magic: self.magic });
         }
 
         let version: u8 = stream.default_read_stream_le();
-        if version != 1 {
-            return Err("Invalid version");
+        if version != Self::VERSION {
+            return Err(Error::InvalidVersion { version });
         }
 
         let options_length = usize::from(stream.default_read_stream_le::<u8>());
@@ -241,7 +240,7 @@ impl PacketV1 {
             flags = type_flags >> 0x4;
         }
 
-        self.base.packet_type = packet_type.try_into().map_err(|_| "Invalid packet type")?;
+        self.base.packet_type = packet_type.try_into()?;
         self.base.flags = PacketFlags::new(flags);
 
         self.base.session_id = stream.default_read_stream_le();
@@ -249,8 +248,13 @@ impl PacketV1 {
         self.base.sequence_id = stream.default_read_stream_le();
         self.base.signature = stream.default_read_byte_stream(16);
 
-        if data_len < stream.get_index() + options_length {
-            return Err("Packet specific data size does not match");
+        let options_end = stream.get_index() + options_length;
+        if data_len < options_end {
+            return Err(Error::InvalidSize {
+                wanted_size: options_end,
+                received_size: data_len,
+                context: "The options length does not fit into the packet data length",
+            });
         }
 
         let options = stream.default_read_byte_stream(options_length);
@@ -261,32 +265,34 @@ impl PacketV1 {
             self.base.payload = stream.default_read_byte_stream(payload_size);
         }
 
-        let header = &data[2..14];
         let calculated_signature = Self::calculate_signature(
-            header,
+            &data[2..14].try_into().unwrap(),
             &self.base.payload,
             context.server_connection_signature(),
             &options,
             context,
-        )?;
+        );
 
         if calculated_signature != self.base.signature {
-            return Err("Calculated signature did not match");
+            return Err(Error::InvalidSignature {
+                calculated_signature,
+                found_signature: self.base.signature.clone(),
+                packet_type: self.base.packet_type,
+                sequence_id: self.base.sequence_id,
+            });
         }
 
         Ok(())
     }
 
-    pub fn decode_options(&mut self, options: &[u8]) -> Result<(), &'static str> {
+    pub fn decode_options(&mut self, options: &[u8]) -> PacketResult<()> {
         let mut options_stream = StreamContainer::new(options);
         let options_len = options.len();
 
         let mut i = 0;
         while i < options_len {
-            let option_type: PacketOption = options_stream
-                .default_read_stream_le::<u8>()
-                .try_into()
-                .map_err(|_| "Invalid packet option")?;
+            let option_type: PacketOption =
+                options_stream.default_read_stream_le::<u8>().try_into()?;
             let option_size = usize::from(options_stream.default_read_stream_le::<u8>());
 
             match option_type {
@@ -350,27 +356,24 @@ impl PacketV1 {
     }
 
     pub fn calculate_signature(
-        header: &[u8],
+        header: &[u8; 12],
         payload: &[u8],
         connection_signature: &[u8],
         options: &[u8],
         context: &SignatureContext,
-    ) -> Result<Vec<u8>, &'static str> {
-        if header.len() < 8 {
-            return Err("Header is too small");
-        }
-
-        let key = context.signature_key();
+    ) -> Vec<u8> {
+        let key: &[u8; 16] = context.signature_key();
         let signature_base = context.signature_base();
 
-        let mut mac = Hmac::<Md5>::new_from_slice(key).map_err(|_| "Invalid hamc key size")?;
+        // The key being [u8; 16] guarantees we won't run into an error
+        let mut mac = Hmac::<Md5>::new_from_slice(key).unwrap();
         mac.update(&header[4..]);
         mac.update(context.session_key());
         mac.update(&signature_base.to_le_bytes());
         mac.update(connection_signature);
         mac.update(options);
         mac.update(payload);
-        Ok(mac.finalize().into_bytes().to_vec())
+        mac.finalize().into_bytes().to_vec()
     }
 }
 

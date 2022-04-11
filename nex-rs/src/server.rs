@@ -2,12 +2,14 @@ use crate::counter::Counter;
 use crate::{
     client::{ClientConnection, ClientContext},
     packet::{Packet, PacketFlag, PacketType, PacketV1},
+    result::{Error as NexError, NexResult},
     rmc::RMCRequest,
 };
 use async_trait::async_trait;
 use getset::{CopyGetters, Getters, Setters};
 use no_std_io::{StreamContainer, StreamWriter};
 use rand::RngCore;
+use snafu::Snafu;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
@@ -16,39 +18,49 @@ use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 use tokio::time;
 
+#[derive(Debug, PartialEq, Snafu)]
+pub enum Error {
+    #[snafu()]
+    NoSocket,
+    #[snafu()]
+    CouldNoBindToAddress,
+    #[snafu()]
+    DataReceiveError,
+    #[snafu()]
+    DataSendError,
+    #[snafu(display(
+        "Tried to send too many fragments to {}: sequence_id 0x{:02x}, fragment_id 0x{:x}",
+        client_addr,
+        sequence_id,
+        fragment_id,
+    ))]
+    TooManyFragments {
+        client_addr: SocketAddr,
+        sequence_id: u16,
+        fragment_id: usize,
+    },
+}
+
+pub type ServerResult<T> = Result<T, Error>;
+
 #[async_trait(?Send)]
 pub trait EventHandler {
-    async fn on_syn(
-        &self,
-        client: &mut ClientConnection,
-        packet: &PacketV1,
-    ) -> Result<(), &'static str>;
-    async fn on_connect(
-        &self,
-        client: &mut ClientConnection,
-        packet: &PacketV1,
-    ) -> Result<(), &'static str>;
-    async fn on_data(
-        &self,
-        client: &mut ClientConnection,
-        packet: &PacketV1,
-    ) -> Result<(), &'static str>;
+    async fn on_syn(&self, client: &mut ClientConnection, packet: &PacketV1) -> NexResult<()>;
+    async fn on_connect(&self, client: &mut ClientConnection, packet: &PacketV1) -> NexResult<()>;
+    async fn on_data(&self, client: &mut ClientConnection, packet: &PacketV1) -> NexResult<()>;
     async fn on_disconnect(
         &self,
         client: &mut ClientConnection,
         packet: &PacketV1,
-    ) -> Result<(), &'static str>;
-    async fn on_ping(
-        &self,
-        client: &mut ClientConnection,
-        packet: &PacketV1,
-    ) -> Result<(), &'static str>;
+    ) -> NexResult<()>;
+    async fn on_ping(&self, client: &mut ClientConnection, packet: &PacketV1) -> NexResult<()>;
 
     async fn on_rmc_request(
         &self,
         client: &mut ClientConnection,
         rmc_request: &RMCRequest,
-    ) -> Result<(), &'static str>;
+    ) -> NexResult<()>;
+    async fn on_error(&self, error: NexError);
 }
 
 #[derive(Debug, Getters, CopyGetters, Setters)]
@@ -150,10 +162,14 @@ pub trait Server: EventHandler {
         self.get_base().settings.prudp_version
     }
 
-    async fn listen(&mut self, addr: &str) -> Result<(), &'static str> {
+    fn get_socket(&self) -> ServerResult<&UdpSocket> {
+        self.get_base().socket.as_ref().ok_or(Error::NoSocket)
+    }
+
+    async fn listen(&mut self, addr: &str) -> ServerResult<()> {
         let socket = UdpSocket::bind(addr)
             .await
-            .map_err(|_| "Couldn't bind to address")?;
+            .map_err(|_| Error::CouldNoBindToAddress)?;
 
         self.get_mut_base().socket = Some(socket);
 
@@ -189,24 +205,20 @@ pub trait Server: EventHandler {
 
         loop {
             let (buf, peer) = self.receive_data().await?;
-            let result = self.handle_socket_message(buf, peer).await;
-            if result.is_err() {
-                println!("Error {:?}", result);
+            if let Err(error) = self.handle_socket_message(buf, peer).await {
+                self.on_error(error).await;
             }
         }
     }
 
-    async fn receive_data(&self) -> Result<(Vec<u8>, SocketAddr), &'static str> {
+    async fn receive_data(&self) -> ServerResult<(Vec<u8>, SocketAddr)> {
         let mut buf: Vec<u8> = vec![0; 0x1000];
-        let socket = match &self.get_base().socket {
-            Some(socket) => Ok(socket),
-            None => Err("No socket"),
-        }?;
+        let socket = &self.get_base().socket.as_ref().ok_or(Error::NoSocket)?;
 
         let (receive_size, peer) = socket
             .recv_from(&mut buf)
             .await
-            .map_err(|_| "UDP Receive error")?;
+            .map_err(|_| Error::DataReceiveError)?;
 
         buf.resize(receive_size, 0);
 
@@ -217,7 +229,7 @@ pub trait Server: EventHandler {
         &self,
         client: &mut ClientConnection,
         packet: &PacketV1,
-    ) -> Result<(), &'static str> {
+    ) -> NexResult<()> {
         match packet.get_packet_type() {
             PacketType::Syn => {
                 self.on_syn(client, packet).await?;
@@ -314,11 +326,7 @@ pub trait Server: EventHandler {
         }
     }
 
-    async fn handle_socket_message(
-        &self,
-        message: Vec<u8>,
-        peer: SocketAddr,
-    ) -> Result<(), &'static str> {
+    async fn handle_socket_message(&self, message: Vec<u8>, peer: SocketAddr) -> NexResult<()> {
         let base = self.get_base();
 
         let client_mutex = &base.clients;
@@ -359,7 +367,7 @@ pub trait Server: EventHandler {
         }
     }
 
-    async fn send_ping(&self, client: &mut ClientConnection) -> Result<(), &'static str> {
+    async fn send_ping(&self, client: &mut ClientConnection) -> ServerResult<()> {
         self.send(client, PacketV1::new_ping_packet()).await
     }
 
@@ -377,7 +385,7 @@ pub trait Server: EventHandler {
         &self,
         client: &mut ClientConnection,
         packet: &PacketV1,
-    ) -> Result<(), &'static str> {
+    ) -> NexResult<()> {
         let packet_type = packet.get_packet_type();
         let flags = packet.get_flags();
         let payload = packet.get_payload();
@@ -397,8 +405,7 @@ pub trait Server: EventHandler {
         packet: &PacketV1,
         client: &mut ClientConnection,
         payload: Option<Vec<u8>>,
-    ) -> Result<(), &'static str> {
-        let nex_version = self.get_base().settings.nex_version;
+    ) -> NexResult<()> {
         let mut ack_packet = packet.new_ack_packet();
 
         if let Some(payload) = payload {
@@ -428,7 +435,7 @@ pub trait Server: EventHandler {
                 let mut payload_stream = StreamContainer::new(vec![]);
 
                 // New version
-                if nex_version >= 2 {
+                if self.get_base().settings.nex_version >= 2 {
                     ack_packet.set_sequence_id(0);
                     ack_packet.set_substream_id(1);
 
@@ -456,7 +463,7 @@ pub trait Server: EventHandler {
         method_id: MethodId,
         call_id: u32,
         data: Data,
-    ) -> Result<(), &'static str> {
+    ) -> ServerResult<()> {
         let packet = client.new_rmc_success(protocol_id, method_id, call_id, data);
         self.send(client, packet).await
     }
@@ -468,16 +475,12 @@ pub trait Server: EventHandler {
         method_id: MethodId,
         call_id: u32,
         error_code: u32,
-    ) -> Result<(), &'static str> {
+    ) -> ServerResult<()> {
         let packet = client.new_rmc_error(protocol_id, method_id, call_id, error_code);
         self.send(client, packet).await
     }
 
-    async fn send(
-        &self,
-        client: &mut ClientConnection,
-        mut packet: PacketV1,
-    ) -> Result<(), &'static str> {
+    async fn send(&self, client: &mut ClientConnection, mut packet: PacketV1) -> ServerResult<()> {
         let fragment_size: usize = self.get_base().settings.fragment_size.into();
         let data = packet.get_payload().to_vec();
         let fragment_count = data.len() / fragment_size;
@@ -485,7 +488,11 @@ pub trait Server: EventHandler {
         let packet = &mut packet;
 
         for i in 0..=fragment_count {
-            let fragment_id: u8 = (i + 1).try_into().map_err(|_| "Too many fragments!")?;
+            let fragment_id: u8 = (i + 1).try_into().map_err(|_| Error::TooManyFragments {
+                client_addr: client.get_address(),
+                fragment_id: i + 1,
+                sequence_id: packet.get_sequence_id(),
+            })?;
 
             if fragment_data.len() < fragment_size {
                 packet.set_payload(fragment_data.to_vec());
@@ -506,7 +513,7 @@ pub trait Server: EventHandler {
         client: &mut ClientConnection,
         packet: &mut PacketV1,
         fragment_id: u8,
-    ) -> Result<usize, &'static str> {
+    ) -> ServerResult<usize> {
         let sequence_id = client.increment_sequence_id_out();
 
         packet.set_sequence_id(sequence_id);
@@ -516,19 +523,12 @@ pub trait Server: EventHandler {
         self.send_raw(client, &encoded_packet).await
     }
 
-    async fn send_raw(
-        &self,
-        client: &ClientConnection,
-        data: &[u8],
-    ) -> Result<usize, &'static str> {
-        let socket = match &self.get_base().socket {
-            Some(socket) => Ok(socket),
-            None => Err("No socket"),
-        }?;
+    async fn send_raw(&self, client: &ClientConnection, data: &[u8]) -> ServerResult<usize> {
+        let socket = self.get_socket()?;
         socket
             .send_to(data, client.get_address())
             .await
-            .map_err(|_| "Error sending data")
+            .map_err(|_| Error::DataSendError)
     }
 }
 
@@ -549,35 +549,35 @@ mod test {
             &self,
             _client: &mut ClientConnection,
             _packet: &PacketV1,
-        ) -> Result<(), &'static str> {
+        ) -> NexResult<()> {
             Ok(())
         }
         async fn on_connect(
             &self,
             _client: &mut ClientConnection,
             _packet: &PacketV1,
-        ) -> Result<(), &'static str> {
+        ) -> NexResult<()> {
             Ok(())
         }
         async fn on_data(
             &self,
             _client: &mut ClientConnection,
             _packet: &PacketV1,
-        ) -> Result<(), &'static str> {
+        ) -> NexResult<()> {
             Ok(())
         }
         async fn on_disconnect(
             &self,
             _client: &mut ClientConnection,
             _packet: &PacketV1,
-        ) -> Result<(), &'static str> {
+        ) -> NexResult<()> {
             Ok(())
         }
         async fn on_ping(
             &self,
             _client: &mut ClientConnection,
             _packet: &PacketV1,
-        ) -> Result<(), &'static str> {
+        ) -> NexResult<()> {
             Ok(())
         }
 
@@ -585,9 +585,10 @@ mod test {
             &self,
             _client: &mut ClientConnection,
             _rmc_request: &RMCRequest,
-        ) -> Result<(), &'static str> {
+        ) -> NexResult<()> {
             Ok(())
         }
+        async fn on_error(&self, _error: NexError) {}
     }
 
     #[async_trait(?Send)]

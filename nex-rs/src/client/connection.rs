@@ -1,7 +1,7 @@
 use super::{ClientConnectionResult, ClientContext, Error};
 use crate::{
     counter::Counter,
-    crypt::rc4::Rc4,
+    crypto::rc4::Rc4,
     packet::{Packet, PacketResult, PacketV1},
     rmc::{RMCRequest, RMCResponse},
 };

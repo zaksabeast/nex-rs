@@ -1,13 +1,13 @@
-use crate::{crypt, packet::PacketType};
+use crate::{crypto, packet::PacketType};
 use snafu::Snafu;
 
 #[derive(Debug, PartialEq, Snafu)]
 pub enum Error {
     #[snafu(display(
-      "Invalid crypt operation: {}",
+      "Invalid crypto operation: {}",
       error.to_string()
   ))]
-    CryptError { error: crypt::Error },
+    CryptoError { error: crypto::Error },
     #[snafu(display(
         "Invalid packet read for PacketType::{:?}, sequence_id: 0x{:02x}: {}",
         packet_type,
@@ -23,9 +23,9 @@ pub enum Error {
     Generic { message: String },
 }
 
-impl From<crypt::Error> for Error {
-    fn from(error: crypt::Error) -> Self {
-        Self::CryptError { error }
+impl From<crypto::Error> for Error {
+    fn from(error: crypto::Error) -> Self {
+        Self::CryptoError { error }
     }
 }
 

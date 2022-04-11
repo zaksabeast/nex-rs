@@ -1,4 +1,4 @@
-use crate::{client, crypt, packet, server};
+use crate::{client, crypto, packet, server};
 use snafu::Snafu;
 
 #[derive(Debug, PartialEq, Snafu)]
@@ -12,7 +12,7 @@ pub enum Error {
         "Crypt error: {}",
         error.to_string()
     ))]
-    CryptError { error: crypt::Error },
+    CryptError { error: crypto::Error },
     #[snafu(display(
         "Client connection error: {}",
         error.to_string()
@@ -33,8 +33,8 @@ impl From<packet::Error> for Error {
     }
 }
 
-impl From<crypt::Error> for Error {
-    fn from(error: crypt::Error) -> Self {
+impl From<crypto::Error> for Error {
+    fn from(error: crypto::Error) -> Self {
         Self::CryptError { error }
     }
 }

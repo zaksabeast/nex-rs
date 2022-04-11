@@ -1,6 +1,6 @@
 pub mod client;
 pub mod counter;
-pub mod crypt;
+pub mod crypto;
 pub mod nex_types;
 pub mod packet;
 pub mod result;

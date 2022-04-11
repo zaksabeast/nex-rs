@@ -1,7 +1,7 @@
 use super::ClientConnectionResult;
 use crate::{
     counter::Counter,
-    crypt::{rc4::Rc4, CryptResult},
+    crypto::{rc4::Rc4, CryptResult},
     packet::{Packet, PacketType, PacketV1, SignatureContext},
 };
 use getset::{CopyGetters, Getters};

@@ -1,5 +1,4 @@
 pub mod client;
-mod compression;
 pub mod counter;
 pub mod crypt_result;
 pub mod kerberos;

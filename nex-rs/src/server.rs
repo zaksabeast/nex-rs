@@ -1,7 +1,6 @@
 use crate::counter::Counter;
 use crate::{
     client::{ClientConnection, ClientContext},
-    compression::{dummy_compression, zlib_compression},
     packet::{Packet, PacketFlag, PacketType, PacketV1},
     result::{Error as NexError, NexResult},
     rmc::RMCRequest,
@@ -76,7 +75,6 @@ pub struct ServerSettings {
     #[getset(set = "pub")]
     fragment_size: u16,
     flags_version: u32,
-    use_packet_compression: bool,
     #[getset(set = "pub")]
     ping_timeout: u32,
     checksum_version: u32,
@@ -93,7 +91,6 @@ impl Default for ServerSettings {
         Self {
             access_key: "".to_string(),
             nex_version: 0,
-            use_packet_compression: false,
             prudp_version: 1,
             fragment_size: 1300,
             ping_timeout: 5,
@@ -517,12 +514,10 @@ pub trait Server: EventHandler {
         packet: &mut PacketV1,
         fragment_id: u8,
     ) -> ServerResult<usize> {
-        let compressed_data = self.compress_packet(packet.get_payload());
         let sequence_id = client.increment_sequence_id_out();
 
         packet.set_sequence_id(sequence_id);
         packet.set_fragment_id(fragment_id);
-        packet.set_payload(compressed_data);
 
         let encoded_packet = client.encode_packet(packet);
         self.send_raw(client, &encoded_packet).await
@@ -534,14 +529,6 @@ pub trait Server: EventHandler {
             .send_to(data, client.get_address())
             .await
             .map_err(|_| Error::DataSendError)
-    }
-
-    fn compress_packet(&self, data: &[u8]) -> Vec<u8> {
-        if self.get_base().settings.use_packet_compression {
-            zlib_compression::compress(data)
-        } else {
-            dummy_compression::compress(data)
-        }
     }
 }
 

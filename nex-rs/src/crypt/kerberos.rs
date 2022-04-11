@@ -1,6 +1,6 @@
-use crate::{
-    crypt_result::{CryptResult, Error},
+use super::{
     rc4::Rc4,
+    result::{CryptResult, Error},
 };
 use hmac::{Hmac, Mac};
 use md5::Md5;

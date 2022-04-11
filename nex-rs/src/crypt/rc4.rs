@@ -1,4 +1,4 @@
-use crate::crypt_result::CryptResult;
+use super::result::CryptResult;
 use crypto::{
     buffer::{RefReadBuffer, RefWriteBuffer},
     rc4,

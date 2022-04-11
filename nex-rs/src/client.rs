@@ -1,8 +1,7 @@
 use crate::{
     counter::Counter,
-    crypt_result::{self, CryptResult},
+    crypt::{self, CryptResult, Rc4},
     packet::{Packet, PacketResult, PacketType, PacketV1, SignatureContext},
-    rc4::Rc4,
     rmc::{RMCRequest, RMCResponse},
 };
 use getset::{CopyGetters, Getters};
@@ -16,7 +15,7 @@ pub enum Error {
         "Invalid crypt operation: {}",
         error.to_string()
     ))]
-    CryptError { error: crypt_result::Error },
+    CryptError { error: crypt::Error },
     #[snafu(display(
         "Invalid packet read for PacketType::{:?}, sequence_id: 0x{:02x}: {}",
         packet_type,
@@ -32,8 +31,8 @@ pub enum Error {
     Generic { message: String },
 }
 
-impl From<crypt_result::Error> for Error {
-    fn from(error: crypt_result::Error) -> Self {
+impl From<crypt::Error> for Error {
+    fn from(error: crypt::Error) -> Self {
         Self::CryptError { error }
     }
 }

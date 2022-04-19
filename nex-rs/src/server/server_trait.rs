@@ -10,7 +10,7 @@ use rand::RngCore;
 use std::{net::SocketAddr, sync::Arc, time::Duration};
 use tokio::{net::UdpSocket, sync::Mutex, time};
 
-#[async_trait(?Send)]
+#[async_trait]
 pub trait Server: EventHandler {
     fn get_base(&self) -> &BaseServer;
     fn get_mut_base(&mut self) -> &mut BaseServer;
@@ -55,13 +55,11 @@ pub trait Server: EventHandler {
         self.get_base().socket.as_ref().ok_or(Error::NoSocket)
     }
 
-    async fn listen(&mut self, addr: &str) -> ServerResult<()> {
-        let socket = UdpSocket::bind(addr)
-            .await
-            .map_err(|_| Error::CouldNoBindToAddress)?;
-
+    fn set_socket(&mut self, socket: UdpSocket) {
         self.get_mut_base().socket = Some(socket);
+    }
 
+    fn create_ping_kick_thread(&mut self) {
         let clients = Arc::clone(&self.get_base().clients);
         let ping_kick_thread = tokio::spawn(async move {
             let mut invertal = time::interval(Duration::from_secs(3));
@@ -91,7 +89,9 @@ pub trait Server: EventHandler {
         });
 
         self.get_mut_base().ping_kick_thread = Some(ping_kick_thread);
+    }
 
+    async fn listen(&self) -> ServerResult<()> {
         loop {
             let (buf, peer) = self.receive_data().await?;
             if let Err(error) = self.handle_socket_message(buf, peer).await {
@@ -345,7 +345,7 @@ pub trait Server: EventHandler {
         Ok(())
     }
 
-    async fn send_success<MethodId: Into<u32>, Data: Into<Vec<u8>>>(
+    async fn send_success<MethodId: Into<u32> + Send, Data: Into<Vec<u8>> + Send>(
         &self,
         client: &mut ClientConnection,
         protocol_id: u8,
@@ -357,7 +357,7 @@ pub trait Server: EventHandler {
         self.send(client, packet).await
     }
 
-    async fn send_error<MethodId: Into<u32>>(
+    async fn send_error<MethodId: Into<u32> + Send>(
         &self,
         client: &mut ClientConnection,
         protocol_id: u8,
@@ -434,7 +434,7 @@ mod test {
         base: BaseServer,
     }
 
-    #[async_trait(?Send)]
+    #[async_trait]
     impl EventHandler for TestServer {
         async fn on_syn(
             &self,
@@ -482,7 +482,7 @@ mod test {
         async fn on_error(&self, _error: NexError) {}
     }
 
-    #[async_trait(?Send)]
+    #[async_trait]
     impl Server for TestServer {
         fn get_base(&self) -> &BaseServer {
             &self.base

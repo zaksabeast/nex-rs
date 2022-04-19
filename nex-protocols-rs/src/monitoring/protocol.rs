@@ -12,7 +12,7 @@ pub enum MonitoringMethod {
     GetClusterMembers = 0x2,
 }
 
-#[async_trait(?Send)]
+#[async_trait]
 pub trait MonitoringProtocol: Server {
     async fn ping_daemon(&self, client: &mut ClientConnection) -> Result<Vec<u8>, ResultCode>;
     async fn get_cluster_members(

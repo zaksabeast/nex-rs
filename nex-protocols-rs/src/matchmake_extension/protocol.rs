@@ -23,7 +23,7 @@ pub enum MatchmakeExtensionMethod {
     SimpleMatchmake = 0x33,
 }
 
-#[async_trait(?Send)]
+#[async_trait]
 pub trait MatchmakeExtensionProtocol: Server {
     async fn close_participation(
         &self,

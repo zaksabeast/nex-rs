@@ -6,7 +6,7 @@ use crate::{
 };
 use async_trait::async_trait;
 
-#[async_trait(?Send)]
+#[async_trait]
 pub trait EventHandler {
     async fn on_syn(&self, client: &mut ClientConnection, packet: &PacketV1) -> NexResult<()>;
     async fn on_connect(&self, client: &mut ClientConnection, packet: &PacketV1) -> NexResult<()>;

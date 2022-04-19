@@ -35,7 +35,7 @@ pub enum DataStoreMethod {
     SearchPokemonV2 = 0x37,
 }
 
-#[async_trait(?Send)]
+#[async_trait]
 pub trait DataStoreProtocol: Server {
     async fn get_metas(
         &self,

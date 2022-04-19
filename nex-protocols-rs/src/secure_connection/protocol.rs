@@ -24,7 +24,7 @@ pub enum SecureConnectionMethod {
     SendReport = 0x8,
 }
 
-#[async_trait(?Send)]
+#[async_trait]
 pub trait SecureConnectionProtocol: Server {
     async fn register(
         &self,

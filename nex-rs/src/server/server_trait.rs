@@ -100,8 +100,8 @@ pub trait Server: EventHandler {
         let server = Arc::new(RwLock::new(server));
 
         loop {
+            let (buf, peer) = server.read().await.receive_data().await?;
             let clone = Arc::clone(&server);
-            let (buf, peer) = clone.read().await.receive_data().await?;
             tokio::spawn(async move {
                 if let Err(error) = clone.read().await.handle_socket_message(buf, peer).await {
                     clone.read().await.on_error(error).await;

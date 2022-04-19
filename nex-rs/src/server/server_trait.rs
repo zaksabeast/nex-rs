@@ -9,6 +9,7 @@ use no_std_io::{StreamContainer, StreamWriter};
 use rand::RngCore;
 use std::{net::SocketAddr, sync::Arc, time::Duration};
 use tokio::{net::UdpSocket, sync::Mutex, time};
+use tokio::sync::RwLock;
 
 #[async_trait]
 pub trait Server: EventHandler {
@@ -95,12 +96,17 @@ pub trait Server: EventHandler {
         Ok(())
     }
 
-    async fn listen(&self) -> ServerResult<()> {
+    async fn listen<T: Server + Sized + Send + Sync + 'static>(server: T) -> ServerResult<()> {
+        let server = Arc::new(RwLock::new(server));
+
         loop {
-            let (buf, peer) = self.receive_data().await?;
-            if let Err(error) = self.handle_socket_message(buf, peer).await {
-                self.on_error(error).await;
-            }
+            let clone = Arc::clone(&server);
+            let (buf, peer) = clone.read().await.receive_data().await?;
+            tokio::spawn(async move {
+                if let Err(error) = clone.read().await.handle_socket_message(buf, peer).await {
+                    clone.read().await.on_error(error).await;
+                }
+            });
         }
     }
 

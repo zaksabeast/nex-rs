@@ -8,8 +8,11 @@ use async_trait::async_trait;
 use no_std_io::{StreamContainer, StreamWriter};
 use rand::RngCore;
 use std::{net::SocketAddr, sync::Arc, time::Duration};
-use tokio::{net::UdpSocket, sync::Mutex, time};
-use tokio::sync::RwLock;
+use tokio::{
+    net::UdpSocket,
+    sync::{Mutex, RwLock},
+    time,
+};
 
 #[async_trait]
 pub trait Server: EventHandler {

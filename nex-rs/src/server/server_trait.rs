@@ -55,11 +55,13 @@ pub trait Server: EventHandler {
         self.get_base().socket.as_ref().ok_or(Error::NoSocket)
     }
 
-    fn set_socket(&mut self, socket: UdpSocket) {
-        self.get_mut_base().socket = Some(socket);
-    }
+    async fn initialize(&mut self, addr: &str) -> ServerResult<()> {
+        let socket = UdpSocket::bind(addr)
+            .await
+            .map_err(|_| Error::CouldNoBindToAddress)?;
 
-    fn create_ping_kick_thread(&mut self) {
+        self.get_mut_base().socket = Some(socket);
+
         let clients = Arc::clone(&self.get_base().clients);
         let ping_kick_thread = tokio::spawn(async move {
             let mut invertal = time::interval(Duration::from_secs(3));
@@ -89,6 +91,8 @@ pub trait Server: EventHandler {
         });
 
         self.get_mut_base().ping_kick_thread = Some(ping_kick_thread);
+
+        Ok(())
     }
 
     async fn listen(&self) -> ServerResult<()> {

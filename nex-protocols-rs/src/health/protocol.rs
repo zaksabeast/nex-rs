@@ -14,7 +14,7 @@ pub enum HealthMethod {
     FixSanityErrors = 0x4,
 }
 
-#[async_trait(? Send)]
+#[async_trait]
 pub trait HealthProtocol: Server {
     async fn ping_daemon(&self, client: &mut ClientConnection) -> Result<Vec<u8>, ResultCode>;
     async fn ping_database(&self, client: &mut ClientConnection) -> Result<Vec<u8>, ResultCode>;

@@ -11,7 +11,7 @@ use no_std_io::{StreamContainer, StreamReader};
 
 pub const AUTHENTICATION_PROTOCOL_ID: u8 = 0xA;
 
-#[async_trait(?Send)]
+#[async_trait]
 pub trait TicketGrantingProtocol: Server {
     async fn login(
         &self,

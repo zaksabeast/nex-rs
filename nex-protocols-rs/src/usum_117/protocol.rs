@@ -17,7 +17,7 @@ pub enum USUM117Method {
     Unknown15 = 0xF,
 }
 
-#[async_trait(?Send)]
+#[async_trait]
 pub trait USUM117Protocol: Server {
     async fn unknown_1(&self, client: &mut ClientConnection) -> Result<Vec<u8>, ResultCode>;
     async fn unknown_7(&self, client: &mut ClientConnection) -> Result<Vec<u8>, ResultCode>;

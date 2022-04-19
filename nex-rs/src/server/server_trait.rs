@@ -8,9 +8,13 @@ use async_trait::async_trait;
 use no_std_io::{StreamContainer, StreamWriter};
 use rand::RngCore;
 use std::{net::SocketAddr, sync::Arc, time::Duration};
-use tokio::{net::UdpSocket, sync::Mutex, time};
+use tokio::{
+    net::UdpSocket,
+    sync::{Mutex, RwLock},
+    time,
+};
 
-#[async_trait(?Send)]
+#[async_trait]
 pub trait Server: EventHandler {
     fn get_base(&self) -> &BaseServer;
     fn get_mut_base(&mut self) -> &mut BaseServer;
@@ -55,7 +59,7 @@ pub trait Server: EventHandler {
         self.get_base().socket.as_ref().ok_or(Error::NoSocket)
     }
 
-    async fn listen(&mut self, addr: &str) -> ServerResult<()> {
+    async fn initialize(&mut self, addr: &str) -> ServerResult<()> {
         let socket = UdpSocket::bind(addr)
             .await
             .map_err(|_| Error::CouldNoBindToAddress)?;
@@ -92,11 +96,20 @@ pub trait Server: EventHandler {
 
         self.get_mut_base().ping_kick_thread = Some(ping_kick_thread);
 
+        Ok(())
+    }
+
+    async fn listen<T: Server + Sized + Send + Sync + 'static>(server: T) -> ServerResult<()> {
+        let server = Arc::new(RwLock::new(server));
+
         loop {
-            let (buf, peer) = self.receive_data().await?;
-            if let Err(error) = self.handle_socket_message(buf, peer).await {
-                self.on_error(error).await;
-            }
+            let (buf, peer) = server.read().await.receive_data().await?;
+            let clone = Arc::clone(&server);
+            tokio::spawn(async move {
+                if let Err(error) = clone.read().await.handle_socket_message(buf, peer).await {
+                    clone.read().await.on_error(error).await;
+                }
+            });
         }
     }
 
@@ -345,7 +358,7 @@ pub trait Server: EventHandler {
         Ok(())
     }
 
-    async fn send_success<MethodId: Into<u32>, Data: Into<Vec<u8>>>(
+    async fn send_success<MethodId: Into<u32> + Send, Data: Into<Vec<u8>> + Send>(
         &self,
         client: &mut ClientConnection,
         protocol_id: u8,
@@ -357,7 +370,7 @@ pub trait Server: EventHandler {
         self.send(client, packet).await
     }
 
-    async fn send_error<MethodId: Into<u32>>(
+    async fn send_error<MethodId: Into<u32> + Send>(
         &self,
         client: &mut ClientConnection,
         protocol_id: u8,
@@ -434,7 +447,7 @@ mod test {
         base: BaseServer,
     }
 
-    #[async_trait(?Send)]
+    #[async_trait]
     impl EventHandler for TestServer {
         async fn on_syn(
             &self,
@@ -482,7 +495,7 @@ mod test {
         async fn on_error(&self, _error: NexError) {}
     }
 
-    #[async_trait(?Send)]
+    #[async_trait]
     impl Server for TestServer {
         fn get_base(&self) -> &BaseServer {
             &self.base

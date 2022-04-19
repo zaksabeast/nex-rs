@@ -13,7 +13,7 @@ pub enum UtilityMethod {
     AcquireNexUniqueId = 0x1,
 }
 
-#[async_trait(?Send)]
+#[async_trait]
 pub trait UtilityProtocol: Server {
     async fn acquire_nex_unique_id(
         &self,

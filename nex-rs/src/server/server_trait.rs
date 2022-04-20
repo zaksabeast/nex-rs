@@ -62,16 +62,15 @@ pub trait Server: EventHandler {
 
         self.get_mut_base().socket = Some(socket);
 
-        let clients = Arc::clone(&self.get_base().clients);
+        let clients_lock = Arc::clone(&self.get_base().clients);
         let ping_kick_thread = tokio::spawn(async move {
             let mut invertal = time::interval(Duration::from_secs(3));
             invertal.tick().await;
 
             loop {
                 invertal.tick().await;
-                let mut clients = clients.write().await;
 
-                for client in clients.iter_mut().map(|c| async { c.write().await }) {
+                for client in clients_lock.write().await.iter_mut().map(|c| async { c.write().await }) {
                     let mut client = client.await;
                     if let Some(timer) = client.get_kick_timer() {
                         client.set_kick_timer(Some(timer.saturating_sub(3)));
@@ -79,7 +78,7 @@ pub trait Server: EventHandler {
                 }
 
                 let mut to_remove = vec![];
-                for (i, client) in clients.iter().enumerate() {
+                for (i, client) in clients_lock.read().await.iter().enumerate() {
                     if let Some(time) = client.read().await.get_kick_timer() {
                         if time == 0 {
                             to_remove.push(i);
@@ -87,6 +86,7 @@ pub trait Server: EventHandler {
                     }
                 }
 
+                let mut clients = clients_lock.write().await;
                 for index in to_remove {
                     clients.remove(index);
                 }

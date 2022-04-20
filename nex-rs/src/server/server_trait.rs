@@ -509,35 +509,35 @@ mod test {
     impl EventHandler for TestServer {
         async fn on_syn(
             &self,
-            _client: &mut ClientConnection,
+            _client: Arc<RwLock<ClientConnection>>,
             _packet: &PacketV1,
         ) -> NexResult<()> {
             Ok(())
         }
         async fn on_connect(
             &self,
-            _client: &mut ClientConnection,
+            _client: Arc<RwLock<ClientConnection>>,
             _packet: &PacketV1,
         ) -> NexResult<()> {
             Ok(())
         }
         async fn on_data(
             &self,
-            _client: &mut ClientConnection,
+            _client: Arc<RwLock<ClientConnection>>,
             _packet: &PacketV1,
         ) -> NexResult<()> {
             Ok(())
         }
         async fn on_disconnect(
             &self,
-            _client: &mut ClientConnection,
+            _client: Arc<RwLock<ClientConnection>>,
             _packet: &PacketV1,
         ) -> NexResult<()> {
             Ok(())
         }
         async fn on_ping(
             &self,
-            _client: &mut ClientConnection,
+            _client: Arc<RwLock<ClientConnection>>,
             _packet: &PacketV1,
         ) -> NexResult<()> {
             Ok(())
@@ -545,7 +545,7 @@ mod test {
 
         async fn on_rmc_request(
             &self,
-            _client: &mut ClientConnection,
+            _client: Arc<RwLock<ClientConnection>>,
             _rmc_request: &RMCRequest,
         ) -> NexResult<()> {
             Ok(())
@@ -565,9 +565,9 @@ mod test {
 
     async fn get_server_with_client(client: ClientConnection) -> TestServer {
         let server = TestServer::default();
-        let client_mutex = server.get_clients();
-        let mut clients = client_mutex.lock().await;
-        clients.push(client);
+        let client_rwlock = server.get_clients();
+        let mut clients = client_rwlock.write().await;
+        clients.push(Arc::new(RwLock::new(client)));
 
         server
     }
@@ -597,8 +597,8 @@ mod test {
             .await
             .unwrap();
 
-        let client_mutex = server.get_clients();
-        let clients = client_mutex.lock().await;
+        let client_rwlock = server.get_clients();
+        let clients = client_rwlock.read().await;
         assert_eq!(clients.len(), 0);
     }
 }

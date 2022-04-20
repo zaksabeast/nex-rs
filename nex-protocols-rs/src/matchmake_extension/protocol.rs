@@ -1,6 +1,7 @@
 use crate::matchmake_extension::MatchmakeSessionSearchCriteria;
 use async_trait::async_trait;
 use nex_rs::{
+    client,
     client::ClientConnection,
     nex_types::{ResultCode, ResultRange},
     result::NexResult,
@@ -24,42 +25,42 @@ pub enum MatchmakeExtensionMethod {
 }
 
 #[async_trait]
-pub trait MatchmakeExtensionProtocol: Server {
+pub trait MatchmakeExtensionProtocol<ClientData: client::ClientData>: Server<ClientData> {
     async fn close_participation(
         &self,
-        client: &mut ClientConnection,
+        client: &mut ClientConnection<ClientData>,
         gid: u32,
     ) -> Result<Vec<u8>, ResultCode>;
     async fn open_participation(
         &self,
-        client: &mut ClientConnection,
+        client: &mut ClientConnection<ClientData>,
         gid: u32,
     ) -> Result<Vec<u8>, ResultCode>;
     async fn browse_matchmake_session(
         &self,
-        client: &mut ClientConnection,
+        client: &mut ClientConnection<ClientData>,
         matchmake_session_search_criteria: MatchmakeSessionSearchCriteria,
         result_range: ResultRange,
     ) -> Result<Vec<u8>, ResultCode>;
     async fn browse_matchmake_session_with_host_urls(
         &self,
-        client: &mut ClientConnection,
+        client: &mut ClientConnection<ClientData>,
         matchmake_session_search_criteria: MatchmakeSessionSearchCriteria,
         result_range: ResultRange,
     ) -> Result<Vec<u8>, ResultCode>;
     async fn get_attraction_status(
         &self,
-        client: &mut ClientConnection,
+        client: &mut ClientConnection<ClientData>,
     ) -> Result<Vec<u8>, ResultCode>;
     async fn simple_matchmake(
         &self,
-        client: &mut ClientConnection,
+        client: &mut ClientConnection<ClientData>,
         group_id: u32,
     ) -> Result<Vec<u8>, ResultCode>;
 
     async fn handle_close_participation(
         &self,
-        client: &mut ClientConnection,
+        client: &mut ClientConnection<ClientData>,
         request: &RMCRequest,
     ) -> NexResult<()> {
         let parameters = request.parameters.as_slice();
@@ -96,7 +97,7 @@ pub trait MatchmakeExtensionProtocol: Server {
 
     async fn handle_open_participation(
         &self,
-        client: &mut ClientConnection,
+        client: &mut ClientConnection<ClientData>,
         request: &RMCRequest,
     ) -> NexResult<()> {
         let parameters = request.parameters.as_slice();
@@ -133,7 +134,7 @@ pub trait MatchmakeExtensionProtocol: Server {
 
     async fn handle_browse_matchmake_session(
         &self,
-        client: &mut ClientConnection,
+        client: &mut ClientConnection<ClientData>,
         request: &RMCRequest,
     ) -> NexResult<()> {
         let parameters = request.parameters.as_slice();
@@ -177,7 +178,7 @@ pub trait MatchmakeExtensionProtocol: Server {
 
     async fn handle_browse_matchmake_session_with_host_urls(
         &self,
-        client: &mut ClientConnection,
+        client: &mut ClientConnection<ClientData>,
         request: &RMCRequest,
     ) -> NexResult<()> {
         let parameters = request.parameters.as_slice();
@@ -225,7 +226,7 @@ pub trait MatchmakeExtensionProtocol: Server {
 
     async fn handle_get_attraction_status(
         &self,
-        client: &mut ClientConnection,
+        client: &mut ClientConnection<ClientData>,
         request: &RMCRequest,
     ) -> NexResult<()> {
         match self.get_attraction_status(client).await {
@@ -255,7 +256,7 @@ pub trait MatchmakeExtensionProtocol: Server {
 
     async fn handle_simple_matchmake(
         &self,
-        client: &mut ClientConnection,
+        client: &mut ClientConnection<ClientData>,
         request: &RMCRequest,
     ) -> NexResult<()> {
         let parameters = request.parameters.as_slice();

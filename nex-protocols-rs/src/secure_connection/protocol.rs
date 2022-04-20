@@ -1,5 +1,6 @@
 use async_trait::async_trait;
 use nex_rs::{
+    client,
     client::ClientConnection,
     nex_types::{DataHolder, NexList, NexQBuffer, NexString, ResultCode},
     result::NexResult,
@@ -25,52 +26,52 @@ pub enum SecureConnectionMethod {
 }
 
 #[async_trait]
-pub trait SecureConnectionProtocol: Server {
+pub trait SecureConnectionProtocol<ClientData: client::ClientData>: Server<ClientData> {
     async fn register(
         &self,
-        client: &mut ClientConnection,
+        client: &mut ClientConnection<ClientData>,
         my_urls: NexList<NexString>,
     ) -> Result<Vec<u8>, ResultCode>;
     async fn request_connection_data(
         &self,
-        client: &mut ClientConnection,
+        client: &mut ClientConnection<ClientData>,
         cid_target: u32,
         pid_target: u32,
     ) -> Result<Vec<u8>, ResultCode>;
     async fn request_urls(
         &self,
-        client: &mut ClientConnection,
+        client: &mut ClientConnection<ClientData>,
         cid_target: u32,
         pid_target: u32,
     ) -> Result<Vec<u8>, ResultCode>;
     async fn register_ex(
         &self,
-        client: &mut ClientConnection,
+        client: &mut ClientConnection<ClientData>,
         my_urls: NexList<NexString>,
         custom_data: DataHolder<NexString>,
     ) -> Result<Vec<u8>, ResultCode>;
-    async fn test_connectivity(&self, client: &mut ClientConnection) -> NexResult<()>;
+    async fn test_connectivity(&self, client: &mut ClientConnection<ClientData>) -> NexResult<()>;
     async fn update_urls(
         &self,
-        client: &mut ClientConnection,
+        client: &mut ClientConnection<ClientData>,
         my_urls: NexList<NexString>,
     ) -> NexResult<()>;
     async fn replace_url(
         &self,
-        client: &mut ClientConnection,
+        client: &mut ClientConnection<ClientData>,
         target: NexString,
         url: NexString,
     ) -> NexResult<()>;
     async fn send_report(
         &self,
-        client: &mut ClientConnection,
+        client: &mut ClientConnection<ClientData>,
         report_id: u32,
         report_data: NexQBuffer,
     ) -> NexResult<()>;
 
     async fn handle_register(
         &self,
-        client: &mut ClientConnection,
+        client: &mut ClientConnection<ClientData>,
         request: &RMCRequest,
     ) -> NexResult<()> {
         let parameters = request.parameters.as_slice();
@@ -107,7 +108,7 @@ pub trait SecureConnectionProtocol: Server {
 
     async fn handle_request_connection_data(
         &self,
-        client: &mut ClientConnection,
+        client: &mut ClientConnection<ClientData>,
         request: &RMCRequest,
     ) -> NexResult<()> {
         let parameters = request.parameters.as_slice();
@@ -151,7 +152,7 @@ pub trait SecureConnectionProtocol: Server {
 
     async fn handle_request_urls(
         &self,
-        client: &mut ClientConnection,
+        client: &mut ClientConnection<ClientData>,
         request: &RMCRequest,
     ) -> NexResult<()> {
         let parameters = request.parameters.as_slice();
@@ -192,7 +193,7 @@ pub trait SecureConnectionProtocol: Server {
 
     async fn handle_register_ex(
         &self,
-        client: &mut ClientConnection,
+        client: &mut ClientConnection<ClientData>,
         request: &RMCRequest,
     ) -> NexResult<()> {
         let parameters = request.parameters.as_slice();
@@ -233,7 +234,7 @@ pub trait SecureConnectionProtocol: Server {
 
     async fn handle_test_connectivity(
         &self,
-        client: &mut ClientConnection,
+        client: &mut ClientConnection<ClientData>,
         _request: &RMCRequest,
     ) -> NexResult<()> {
         self.test_connectivity(client).await
@@ -241,7 +242,7 @@ pub trait SecureConnectionProtocol: Server {
 
     async fn handle_update_urls(
         &self,
-        client: &mut ClientConnection,
+        client: &mut ClientConnection<ClientData>,
         request: &RMCRequest,
     ) -> NexResult<()> {
         let parameters = request.parameters.as_slice();
@@ -256,7 +257,7 @@ pub trait SecureConnectionProtocol: Server {
 
     async fn handle_replace_url(
         &self,
-        client: &mut ClientConnection,
+        client: &mut ClientConnection<ClientData>,
         request: &RMCRequest,
     ) -> NexResult<()> {
         let parameters = request.parameters.as_slice();
@@ -275,7 +276,7 @@ pub trait SecureConnectionProtocol: Server {
 
     async fn handle_send_report(
         &self,
-        client: &mut ClientConnection,
+        client: &mut ClientConnection<ClientData>,
         request: &RMCRequest,
     ) -> NexResult<()> {
         let parameters = request.parameters.as_slice();

@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use nex_rs::{
-    client::ClientConnection, nex_types::ResultCode, result::NexResult, rmc::RMCRequest,
+    client, client::ClientConnection, nex_types::ResultCode, result::NexResult, rmc::RMCRequest,
     server::Server,
 };
 use num_enum::{IntoPrimitive, TryFromPrimitive};
@@ -14,15 +14,15 @@ pub enum UtilityMethod {
 }
 
 #[async_trait]
-pub trait UtilityProtocol: Server {
+pub trait UtilityProtocol<ClientData: client::ClientData>: Server<ClientData> {
     async fn acquire_nex_unique_id(
         &self,
-        client: &mut ClientConnection,
+        client: &mut ClientConnection<ClientData>,
     ) -> Result<Vec<u8>, ResultCode>;
 
     async fn handle_acquire_nex_unique_id(
         &self,
-        client: &mut ClientConnection,
+        client: &mut ClientConnection<ClientData>,
         request: &RMCRequest,
     ) -> NexResult<()> {
         match self.acquire_nex_unique_id(client).await {

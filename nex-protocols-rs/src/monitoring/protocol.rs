@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use nex_rs::{
-    client::ClientConnection, nex_types::ResultCode, result::NexResult, rmc::RMCRequest,
+    client, client::ClientConnection, nex_types::ResultCode, result::NexResult, rmc::RMCRequest,
     server::Server,
 };
 use num_enum::{IntoPrimitive, TryFromPrimitive};
@@ -13,16 +13,19 @@ pub enum MonitoringMethod {
 }
 
 #[async_trait]
-pub trait MonitoringProtocol: Server {
-    async fn ping_daemon(&self, client: &mut ClientConnection) -> Result<Vec<u8>, ResultCode>;
+pub trait MonitoringProtocol<ClientData: client::ClientData>: Server<ClientData> {
+    async fn ping_daemon(
+        &self,
+        client: &mut ClientConnection<ClientData>,
+    ) -> Result<Vec<u8>, ResultCode>;
     async fn get_cluster_members(
         &self,
-        client: &mut ClientConnection,
+        client: &mut ClientConnection<ClientData>,
     ) -> Result<Vec<u8>, ResultCode>;
 
     async fn handle_ping_daemon(
         &self,
-        client: &mut ClientConnection,
+        client: &mut ClientConnection<ClientData>,
         request: &RMCRequest,
     ) -> NexResult<()> {
         match self.ping_daemon(client).await {
@@ -52,7 +55,7 @@ pub trait MonitoringProtocol: Server {
 
     async fn handle_get_cluster_members(
         &self,
-        client: &mut ClientConnection,
+        client: &mut ClientConnection<ClientData>,
         request: &RMCRequest,
     ) -> NexResult<()> {
         match self.get_cluster_members(client).await {

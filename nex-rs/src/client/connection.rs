@@ -8,18 +8,21 @@ use crate::{
 use no_std_io::Reader;
 use std::net::SocketAddr;
 
+pub trait ClientData: 'static + Clone + Send + Sync {}
+
 #[derive(Clone)]
-pub struct ClientConnection {
+pub struct ClientConnection<Data: ClientData> {
     address: SocketAddr,
     session_id: u8,
     pid: u32,
     is_connected: bool,
     kick_timer: Option<u32>,
     context: ClientContext,
+    pub data: Option<Data>,
 }
 
-impl ClientConnection {
-    pub fn new(address: SocketAddr, context: ClientContext) -> Self {
+impl<Data: ClientData> ClientConnection<Data> {
+    pub fn new(address: SocketAddr, context: ClientContext, data: Option<Data>) -> Self {
         Self {
             address,
             session_id: 0,
@@ -27,6 +30,7 @@ impl ClientConnection {
             is_connected: false,
             kick_timer: None,
             context,
+            data,
         }
     }
 

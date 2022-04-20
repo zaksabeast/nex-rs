@@ -1,5 +1,6 @@
 use super::{BaseServer, Error, EventHandler, ServerResult};
 use crate::{
+    client,
     client::ClientConnection,
     packet::{Packet, PacketFlag, PacketType, PacketV1},
     result::NexResult,
@@ -15,11 +16,11 @@ use tokio::{
 };
 
 #[async_trait]
-pub trait Server: EventHandler {
-    fn get_base(&self) -> &BaseServer;
-    fn get_mut_base(&mut self) -> &mut BaseServer;
+pub trait Server<ClientData: client::ClientData>: EventHandler<ClientData> {
+    fn get_base(&self) -> &BaseServer<ClientData>;
+    fn get_mut_base(&mut self) -> &mut BaseServer<ClientData>;
 
-    fn get_clients(&self) -> Arc<Mutex<Vec<ClientConnection>>> {
+    fn get_clients(&self) -> Arc<Mutex<Vec<ClientConnection<ClientData>>>> {
         Arc::clone(&self.get_base().clients)
     }
 
@@ -90,7 +91,7 @@ pub trait Server: EventHandler {
                             Some(c.clone())
                         }
                     })
-                    .collect::<Vec<ClientConnection>>();
+                    .collect::<Vec<ClientConnection<ClientData>>>();
             }
         });
 
@@ -99,7 +100,9 @@ pub trait Server: EventHandler {
         Ok(())
     }
 
-    async fn listen<T: Server + Sized + Send + Sync + 'static>(server: T) -> ServerResult<()> {
+    async fn listen<T: Server<ClientData> + Sized + Send + Sync + 'static>(
+        server: T,
+    ) -> ServerResult<()> {
         let server = Arc::new(RwLock::new(server));
 
         loop {
@@ -129,7 +132,7 @@ pub trait Server: EventHandler {
 
     async fn emit_packet_events(
         &self,
-        client: &mut ClientConnection,
+        client: &mut ClientConnection<ClientData>,
         packet: &PacketV1,
     ) -> NexResult<()> {
         match packet.get_packet_type() {
@@ -158,7 +161,11 @@ pub trait Server: EventHandler {
         Ok(())
     }
 
-    fn should_ignore_packet(&self, client: &mut ClientConnection, packet: &PacketV1) -> bool {
+    fn should_ignore_packet(
+        &self,
+        client: &mut ClientConnection<ClientData>,
+        packet: &PacketV1,
+    ) -> bool {
         let packet_type = packet.get_packet_type();
 
         // Ignore packets from disconnected clients
@@ -175,7 +182,7 @@ pub trait Server: EventHandler {
         false
     }
 
-    fn handle_connection_init(&self, client: &mut ClientConnection, packet: &PacketV1) {
+    fn handle_connection_init(&self, client: &mut ClientConnection<ClientData>, packet: &PacketV1) {
         match packet.get_packet_type() {
             PacketType::Syn => {
                 client.reset();
@@ -194,7 +201,11 @@ pub trait Server: EventHandler {
         }
     }
 
-    fn increment_sequence_id_in(&self, client: &mut ClientConnection, packet: &PacketV1) {
+    fn increment_sequence_id_in(
+        &self,
+        client: &mut ClientConnection<ClientData>,
+        packet: &PacketV1,
+    ) {
         // Pings have their own sequence ids
         if packet.get_packet_type() != PacketType::Ping {
             client.increment_sequence_id_in();
@@ -209,9 +220,9 @@ pub trait Server: EventHandler {
 
     fn find_or_create_client<'a>(
         &self,
-        clients: &'a mut Vec<ClientConnection>,
+        clients: &'a mut Vec<ClientConnection<ClientData>>,
         addr: SocketAddr,
-    ) -> &'a mut ClientConnection {
+    ) -> &'a mut ClientConnection<ClientData> {
         let client_index = clients
             .iter()
             .position(|client| client.get_address() == addr);
@@ -220,7 +231,8 @@ pub trait Server: EventHandler {
             Some(index) => &mut clients[index],
             None => {
                 let settings = &self.get_base().settings;
-                let new_client = ClientConnection::new(addr, settings.create_client_context());
+                let new_client =
+                    ClientConnection::new(addr, settings.create_client_context(), None);
                 clients.push(new_client);
                 // We just pushed a client, so we know one exists
                 clients.last_mut().unwrap()
@@ -269,7 +281,7 @@ pub trait Server: EventHandler {
         }
     }
 
-    async fn send_ping(&self, client: &mut ClientConnection) -> ServerResult<()> {
+    async fn send_ping(&self, client: &mut ClientConnection<ClientData>) -> ServerResult<()> {
         self.send(client, PacketV1::new_ping_packet()).await
     }
 
@@ -285,7 +297,7 @@ pub trait Server: EventHandler {
 
     async fn acknowledge_packet(
         &self,
-        client: &mut ClientConnection,
+        client: &mut ClientConnection<ClientData>,
         packet: &PacketV1,
     ) -> NexResult<()> {
         let packet_type = packet.get_packet_type();
@@ -305,7 +317,7 @@ pub trait Server: EventHandler {
     async fn send_acknowledge_packet(
         &self,
         packet: &PacketV1,
-        client: &mut ClientConnection,
+        client: &mut ClientConnection<ClientData>,
         payload: Option<Vec<u8>>,
     ) -> NexResult<()> {
         let mut ack_packet = packet.new_ack_packet();
@@ -360,7 +372,7 @@ pub trait Server: EventHandler {
 
     async fn send_success<MethodId: Into<u32> + Send, Data: Into<Vec<u8>> + Send>(
         &self,
-        client: &mut ClientConnection,
+        client: &mut ClientConnection<ClientData>,
         protocol_id: u8,
         method_id: MethodId,
         call_id: u32,
@@ -372,7 +384,7 @@ pub trait Server: EventHandler {
 
     async fn send_error<MethodId: Into<u32> + Send>(
         &self,
-        client: &mut ClientConnection,
+        client: &mut ClientConnection<ClientData>,
         protocol_id: u8,
         method_id: MethodId,
         call_id: u32,
@@ -382,7 +394,11 @@ pub trait Server: EventHandler {
         self.send(client, packet).await
     }
 
-    async fn send(&self, client: &mut ClientConnection, mut packet: PacketV1) -> ServerResult<()> {
+    async fn send(
+        &self,
+        client: &mut ClientConnection<ClientData>,
+        mut packet: PacketV1,
+    ) -> ServerResult<()> {
         let fragment_size: usize = self.get_base().settings.fragment_size.into();
         let data = packet.get_payload().to_vec();
         let fragment_count = data.len() / fragment_size;
@@ -412,7 +428,7 @@ pub trait Server: EventHandler {
 
     async fn send_fragment(
         &self,
-        client: &mut ClientConnection,
+        client: &mut ClientConnection<ClientData>,
         packet: &mut PacketV1,
         fragment_id: u8,
     ) -> ServerResult<usize> {
@@ -425,7 +441,11 @@ pub trait Server: EventHandler {
         self.send_raw(client, &encoded_packet).await
     }
 
-    async fn send_raw(&self, client: &ClientConnection, data: &[u8]) -> ServerResult<usize> {
+    async fn send_raw(
+        &self,
+        client: &ClientConnection<ClientData>,
+        data: &[u8],
+    ) -> ServerResult<usize> {
         let socket = self.get_socket()?;
         socket
             .send_to(data, client.get_address())
@@ -438,48 +458,53 @@ pub trait Server: EventHandler {
 mod test {
     use super::*;
     use crate::{
-        client::ClientContext, packet::SignatureContext, result::Error as NexError, rmc::RMCRequest,
+        client::{ClientContext, ClientData},
+        packet::SignatureContext,
+        result::Error as NexError,
+        rmc::RMCRequest,
     };
     use std::net::{IpAddr, Ipv4Addr};
 
+    impl ClientData for () {}
+
     #[derive(Default)]
     struct TestServer {
-        base: BaseServer,
+        base: BaseServer<()>,
     }
 
     #[async_trait]
-    impl EventHandler for TestServer {
+    impl EventHandler<()> for TestServer {
         async fn on_syn(
             &self,
-            _client: &mut ClientConnection,
+            _client: &mut ClientConnection<()>,
             _packet: &PacketV1,
         ) -> NexResult<()> {
             Ok(())
         }
         async fn on_connect(
             &self,
-            _client: &mut ClientConnection,
+            _client: &mut ClientConnection<()>,
             _packet: &PacketV1,
         ) -> NexResult<()> {
             Ok(())
         }
         async fn on_data(
             &self,
-            _client: &mut ClientConnection,
+            _client: &mut ClientConnection<()>,
             _packet: &PacketV1,
         ) -> NexResult<()> {
             Ok(())
         }
         async fn on_disconnect(
             &self,
-            _client: &mut ClientConnection,
+            _client: &mut ClientConnection<()>,
             _packet: &PacketV1,
         ) -> NexResult<()> {
             Ok(())
         }
         async fn on_ping(
             &self,
-            _client: &mut ClientConnection,
+            _client: &mut ClientConnection<()>,
             _packet: &PacketV1,
         ) -> NexResult<()> {
             Ok(())
@@ -487,7 +512,7 @@ mod test {
 
         async fn on_rmc_request(
             &self,
-            _client: &mut ClientConnection,
+            _client: &mut ClientConnection<()>,
             _rmc_request: &RMCRequest,
         ) -> NexResult<()> {
             Ok(())
@@ -496,16 +521,16 @@ mod test {
     }
 
     #[async_trait]
-    impl Server for TestServer {
-        fn get_base(&self) -> &BaseServer {
+    impl Server<()> for TestServer {
+        fn get_base(&self) -> &BaseServer<()> {
             &self.base
         }
-        fn get_mut_base(&mut self) -> &mut BaseServer {
+        fn get_mut_base(&mut self) -> &mut BaseServer<()> {
             &mut self.base
         }
     }
 
-    async fn get_server_with_client(client: ClientConnection) -> TestServer {
+    async fn get_server_with_client(client: ClientConnection<()>) -> TestServer {
         let server = TestServer::default();
         let client_mutex = server.get_clients();
         let mut clients = client_mutex.lock().await;
@@ -519,7 +544,7 @@ mod test {
     async fn should_not_deadlock_when_handling_disconnect_message() {
         // Set up client
         let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080);
-        let mut client = ClientConnection::new(addr, ClientContext::default());
+        let mut client = ClientConnection::new(addr, ClientContext::default(), None);
         client.set_is_connected(true);
 
         // Get server with client

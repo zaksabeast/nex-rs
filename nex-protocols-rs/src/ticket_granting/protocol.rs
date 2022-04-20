@@ -1,6 +1,7 @@
 use super::types::AuthenticationInfo;
 use async_trait::async_trait;
 use nex_rs::{
+    client,
     client::ClientConnection,
     nex_types::{DataHolder, NexString, ResultCode},
     result::NexResult,
@@ -12,39 +13,42 @@ use no_std_io::{StreamContainer, StreamReader};
 pub const AUTHENTICATION_PROTOCOL_ID: u8 = 0xA;
 
 #[async_trait]
-pub trait TicketGrantingProtocol: Server {
+pub trait TicketGrantingProtocol<ClientData: client::ClientData>: Server<ClientData> {
     async fn login(
         &self,
-        client: &mut ClientConnection,
+        client: &mut ClientConnection<ClientData>,
         username: String,
     ) -> Result<Vec<u8>, ResultCode>;
     async fn login_ex(
         &self,
-        client: &mut ClientConnection,
+        client: &mut ClientConnection<ClientData>,
         username: String,
         ticket_granting_info: AuthenticationInfo,
     ) -> Result<Vec<u8>, ResultCode>;
     async fn request_ticket(
         &self,
-        client: &mut ClientConnection,
+        client: &mut ClientConnection<ClientData>,
         user_pid: u32,
         server_pid: u32,
     ) -> Result<Vec<u8>, ResultCode>;
     async fn get_pid(
         &self,
-        client: &mut ClientConnection,
+        client: &mut ClientConnection<ClientData>,
         username: String,
     ) -> Result<Vec<u8>, ResultCode>;
     async fn get_name(
         &self,
-        client: &mut ClientConnection,
+        client: &mut ClientConnection<ClientData>,
         user_pid: u32,
     ) -> Result<Vec<u8>, ResultCode>;
-    async fn login_with_param(&self, client: &mut ClientConnection) -> Result<Vec<u8>, ResultCode>;
+    async fn login_with_param(
+        &self,
+        client: &mut ClientConnection<ClientData>,
+    ) -> Result<Vec<u8>, ResultCode>;
 
     async fn handle_login(
         &self,
-        client: &mut ClientConnection,
+        client: &mut ClientConnection<ClientData>,
         request: &RMCRequest,
     ) -> NexResult<()> {
         let parameters = request.parameters.as_slice();
@@ -86,7 +90,7 @@ pub trait TicketGrantingProtocol: Server {
 
     async fn handle_login_ex(
         &self,
-        client: &mut ClientConnection,
+        client: &mut ClientConnection<ClientData>,
         request: &RMCRequest,
     ) -> NexResult<()> {
         let parameters = request.parameters.as_slice();
@@ -141,7 +145,7 @@ pub trait TicketGrantingProtocol: Server {
 
     async fn handle_request_ticket(
         &self,
-        client: &mut ClientConnection,
+        client: &mut ClientConnection<ClientData>,
         request: &RMCRequest,
     ) -> NexResult<()> {
         let parameters = request.parameters.as_slice();
@@ -185,7 +189,7 @@ pub trait TicketGrantingProtocol: Server {
 
     async fn handle_get_pid(
         &self,
-        client: &mut ClientConnection,
+        client: &mut ClientConnection<ClientData>,
         request: &RMCRequest,
     ) -> NexResult<()> {
         let parameters = request.parameters.as_slice();
@@ -226,7 +230,7 @@ pub trait TicketGrantingProtocol: Server {
 
     async fn handle_get_name(
         &self,
-        client: &mut ClientConnection,
+        client: &mut ClientConnection<ClientData>,
         request: &RMCRequest,
     ) -> NexResult<()> {
         let parameters = request.parameters.as_slice();

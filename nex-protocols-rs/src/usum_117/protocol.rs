@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use nex_rs::{
-    client::ClientConnection, nex_types::ResultCode, result::NexResult, rmc::RMCRequest,
+    client, client::ClientConnection, nex_types::ResultCode, result::NexResult, rmc::RMCRequest,
     server::Server,
 };
 use num_enum::{IntoPrimitive, TryFromPrimitive};
@@ -18,16 +18,31 @@ pub enum USUM117Method {
 }
 
 #[async_trait]
-pub trait USUM117Protocol: Server {
-    async fn unknown_1(&self, client: &mut ClientConnection) -> Result<Vec<u8>, ResultCode>;
-    async fn unknown_7(&self, client: &mut ClientConnection) -> Result<Vec<u8>, ResultCode>;
-    async fn unknown_9(&self, client: &mut ClientConnection) -> Result<Vec<u8>, ResultCode>;
-    async fn unknown_10(&self, client: &mut ClientConnection) -> Result<Vec<u8>, ResultCode>;
-    async fn unknown_15(&self, client: &mut ClientConnection) -> Result<Vec<u8>, ResultCode>;
+pub trait USUM117Protocol<ClientData: client::ClientData>: Server<ClientData> {
+    async fn unknown_1(
+        &self,
+        client: &mut ClientConnection<ClientData>,
+    ) -> Result<Vec<u8>, ResultCode>;
+    async fn unknown_7(
+        &self,
+        client: &mut ClientConnection<ClientData>,
+    ) -> Result<Vec<u8>, ResultCode>;
+    async fn unknown_9(
+        &self,
+        client: &mut ClientConnection<ClientData>,
+    ) -> Result<Vec<u8>, ResultCode>;
+    async fn unknown_10(
+        &self,
+        client: &mut ClientConnection<ClientData>,
+    ) -> Result<Vec<u8>, ResultCode>;
+    async fn unknown_15(
+        &self,
+        client: &mut ClientConnection<ClientData>,
+    ) -> Result<Vec<u8>, ResultCode>;
 
     async fn handle_unknown_1(
         &self,
-        client: &mut ClientConnection,
+        client: &mut ClientConnection<ClientData>,
         request: &RMCRequest,
     ) -> NexResult<()> {
         match self.unknown_1(client).await {
@@ -57,7 +72,7 @@ pub trait USUM117Protocol: Server {
 
     async fn handle_unknown_7(
         &self,
-        client: &mut ClientConnection,
+        client: &mut ClientConnection<ClientData>,
         request: &RMCRequest,
     ) -> NexResult<()> {
         match self.unknown_7(client).await {
@@ -87,7 +102,7 @@ pub trait USUM117Protocol: Server {
 
     async fn handle_unknown_9(
         &self,
-        client: &mut ClientConnection,
+        client: &mut ClientConnection<ClientData>,
         request: &RMCRequest,
     ) -> NexResult<()> {
         match self.unknown_9(client).await {
@@ -117,7 +132,7 @@ pub trait USUM117Protocol: Server {
 
     async fn handle_unknown_10(
         &self,
-        client: &mut ClientConnection,
+        client: &mut ClientConnection<ClientData>,
         request: &RMCRequest,
     ) -> NexResult<()> {
         match self.unknown_10(client).await {
@@ -147,7 +162,7 @@ pub trait USUM117Protocol: Server {
 
     async fn handle_unknown_15(
         &self,
-        client: &mut ClientConnection,
+        client: &mut ClientConnection<ClientData>,
         request: &RMCRequest,
     ) -> NexResult<()> {
         match self.unknown_15(client).await {

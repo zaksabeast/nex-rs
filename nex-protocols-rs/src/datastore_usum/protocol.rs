@@ -7,6 +7,7 @@ use crate::datastore_usum::{
 };
 use async_trait::async_trait;
 use nex_rs::{
+    client,
     client::ClientConnection,
     nex_types::{NexList, NexStruct, ResultCode},
     result::NexResult,
@@ -36,73 +37,73 @@ pub enum DataStoreMethod {
 }
 
 #[async_trait]
-pub trait DataStoreProtocol: Server {
+pub trait DataStoreProtocol<ClientData: client::ClientData>: Server<ClientData> {
     async fn get_metas(
         &self,
-        client: &mut ClientConnection,
+        client: &mut ClientConnection<ClientData>,
         data_ids: NexList<u64>,
         param: DataStoreGetMetaParam,
     ) -> Result<Vec<u8>, ResultCode>;
     async fn rate_object(
         &self,
-        client: &mut ClientConnection,
+        client: &mut ClientConnection<ClientData>,
         target: DataStoreRatingTarget,
         param: DataStoreRateObjectParam,
         fetch_ratings: bool,
     ) -> Result<Vec<u8>, ResultCode>;
     async fn post_meta_binary(
         &self,
-        client: &mut ClientConnection,
+        client: &mut ClientConnection<ClientData>,
         param: DataStorePreparePostParam,
     ) -> Result<Vec<u8>, ResultCode>;
     async fn change_metas(
         &self,
-        client: &mut ClientConnection,
+        client: &mut ClientConnection<ClientData>,
         param: ChangeMetasRequest,
     ) -> Result<Vec<u8>, ResultCode>;
     async fn prepare_upload_pokemon(
         &self,
-        client: &mut ClientConnection,
+        client: &mut ClientConnection<ClientData>,
     ) -> Result<Vec<u8>, ResultCode>;
     async fn upload_pokemon(
         &self,
-        client: &mut ClientConnection,
+        client: &mut ClientConnection<ClientData>,
         param: GlobalTradeStationUploadPokemonParam,
     ) -> Result<Vec<u8>, ResultCode>;
     async fn prepare_trade_pokemon(
         &self,
-        client: &mut ClientConnection,
+        client: &mut ClientConnection<ClientData>,
         param: GlobalTradeStationPrepareTradePokemonParam,
     ) -> Result<Vec<u8>, ResultCode>;
     async fn trade_pokemon(
         &self,
-        client: &mut ClientConnection,
+        client: &mut ClientConnection<ClientData>,
         param: GlobalTradeStationTradePokemonParam,
     ) -> Result<Vec<u8>, ResultCode>;
     async fn download_other_pokemon(
         &self,
-        client: &mut ClientConnection,
+        client: &mut ClientConnection<ClientData>,
         param: GlobalTradeStationDownloadOtherPokemonParam,
     ) -> Result<Vec<u8>, ResultCode>;
     async fn download_my_pokemon(
         &self,
-        client: &mut ClientConnection,
+        client: &mut ClientConnection<ClientData>,
         param: GlobalTradeStationDownloadMyPokemonParam,
     ) -> Result<Vec<u8>, ResultCode>;
     async fn delete_pokemon(
         &self,
-        client: &mut ClientConnection,
+        client: &mut ClientConnection<ClientData>,
         param: GlobalTradeStationDeletePokemonParam,
     ) -> Result<(), ResultCode>;
     async fn search_pokemon_v2(
         &self,
-        client: &mut ClientConnection,
+        client: &mut ClientConnection<ClientData>,
         param: GlobalTradeStationSearchPokemonParam,
     ) -> Result<Vec<u8>, ResultCode>;
 
     async fn handle_get_metas(
         &self,
-        client: &mut ClientConnection,
+        client: &mut ClientConnection<ClientData>,
         request: &RMCRequest,
     ) -> NexResult<()> {
         let parameters = request.parameters.as_slice();
@@ -143,7 +144,7 @@ pub trait DataStoreProtocol: Server {
 
     async fn handle_rate_object(
         &self,
-        client: &mut ClientConnection,
+        client: &mut ClientConnection<ClientData>,
         request: &RMCRequest,
     ) -> NexResult<()> {
         let parameters = request.parameters.as_slice();
@@ -187,7 +188,7 @@ pub trait DataStoreProtocol: Server {
 
     async fn handle_post_meta_binary(
         &self,
-        client: &mut ClientConnection,
+        client: &mut ClientConnection<ClientData>,
         request: &RMCRequest,
     ) -> NexResult<()> {
         let parameters = request.parameters.as_slice();
@@ -225,7 +226,7 @@ pub trait DataStoreProtocol: Server {
 
     async fn handle_change_metas(
         &self,
-        client: &mut ClientConnection,
+        client: &mut ClientConnection<ClientData>,
         request: &RMCRequest,
     ) -> NexResult<()> {
         let parameters = request.parameters.as_slice();
@@ -263,7 +264,7 @@ pub trait DataStoreProtocol: Server {
 
     async fn handle_prepare_upload_pokemon(
         &self,
-        client: &mut ClientConnection,
+        client: &mut ClientConnection<ClientData>,
         request: &RMCRequest,
     ) -> NexResult<()> {
         match self.prepare_upload_pokemon(client).await {
@@ -293,7 +294,7 @@ pub trait DataStoreProtocol: Server {
 
     async fn handle_upload_pokemon(
         &self,
-        client: &mut ClientConnection,
+        client: &mut ClientConnection<ClientData>,
         request: &RMCRequest,
     ) -> NexResult<()> {
         let parameters = request.parameters.as_slice();
@@ -331,7 +332,7 @@ pub trait DataStoreProtocol: Server {
 
     async fn handle_prepare_trade_pokemon(
         &self,
-        client: &mut ClientConnection,
+        client: &mut ClientConnection<ClientData>,
         request: &RMCRequest,
     ) -> NexResult<()> {
         let parameters = request.parameters.as_slice();
@@ -369,7 +370,7 @@ pub trait DataStoreProtocol: Server {
 
     async fn handle_trade_pokemon(
         &self,
-        client: &mut ClientConnection,
+        client: &mut ClientConnection<ClientData>,
         request: &RMCRequest,
     ) -> NexResult<()> {
         let parameters = request.parameters.as_slice();
@@ -407,7 +408,7 @@ pub trait DataStoreProtocol: Server {
 
     async fn handle_download_other_pokemon(
         &self,
-        client: &mut ClientConnection,
+        client: &mut ClientConnection<ClientData>,
         request: &RMCRequest,
     ) -> NexResult<()> {
         let parameters = request.parameters.as_slice();
@@ -445,7 +446,7 @@ pub trait DataStoreProtocol: Server {
 
     async fn handle_download_my_pokemon(
         &self,
-        client: &mut ClientConnection,
+        client: &mut ClientConnection<ClientData>,
         request: &RMCRequest,
     ) -> NexResult<()> {
         let parameters = request.parameters.as_slice();
@@ -483,7 +484,7 @@ pub trait DataStoreProtocol: Server {
 
     async fn handle_delete_pokemon(
         &self,
-        client: &mut ClientConnection,
+        client: &mut ClientConnection<ClientData>,
         request: &RMCRequest,
     ) -> NexResult<()> {
         let parameters = request.parameters.as_slice();
@@ -521,7 +522,7 @@ pub trait DataStoreProtocol: Server {
 
     async fn handle_search_pokemon_v2(
         &self,
-        client: &mut ClientConnection,
+        client: &mut ClientConnection<ClientData>,
         request: &RMCRequest,
     ) -> NexResult<()> {
         let parameters = request.parameters.as_slice();

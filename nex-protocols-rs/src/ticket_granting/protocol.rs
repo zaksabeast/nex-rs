@@ -8,6 +8,8 @@ use nex_rs::{
     server::Server,
 };
 use no_std_io::{StreamContainer, StreamReader};
+use std::sync::Arc;
+use tokio::sync::RwLock;
 
 pub const AUTHENTICATION_PROTOCOL_ID: u8 = 0xA;
 
@@ -15,36 +17,39 @@ pub const AUTHENTICATION_PROTOCOL_ID: u8 = 0xA;
 pub trait TicketGrantingProtocol: Server {
     async fn login(
         &self,
-        client: &mut ClientConnection,
+        client: Arc<RwLock<ClientConnection>>,
         username: String,
     ) -> Result<Vec<u8>, ResultCode>;
     async fn login_ex(
         &self,
-        client: &mut ClientConnection,
+        client: Arc<RwLock<ClientConnection>>,
         username: String,
         ticket_granting_info: AuthenticationInfo,
     ) -> Result<Vec<u8>, ResultCode>;
     async fn request_ticket(
         &self,
-        client: &mut ClientConnection,
+        client: Arc<RwLock<ClientConnection>>,
         user_pid: u32,
         server_pid: u32,
     ) -> Result<Vec<u8>, ResultCode>;
     async fn get_pid(
         &self,
-        client: &mut ClientConnection,
+        client: Arc<RwLock<ClientConnection>>,
         username: String,
     ) -> Result<Vec<u8>, ResultCode>;
     async fn get_name(
         &self,
-        client: &mut ClientConnection,
+        client: Arc<RwLock<ClientConnection>>,
         user_pid: u32,
     ) -> Result<Vec<u8>, ResultCode>;
-    async fn login_with_param(&self, client: &mut ClientConnection) -> Result<Vec<u8>, ResultCode>;
+    async fn login_with_param(
+        &self,
+        client: Arc<RwLock<ClientConnection>>,
+    ) -> Result<Vec<u8>, ResultCode>;
 
     async fn handle_login(
         &self,
-        client: &mut ClientConnection,
+        client: Arc<RwLock<ClientConnection>>,
         request: &RMCRequest,
     ) -> NexResult<()> {
         let parameters = request.parameters.as_slice();
@@ -59,7 +64,7 @@ pub trait TicketGrantingProtocol: Server {
             return Err("Failed to read username".into());
         }
 
-        match self.login(client, username).await {
+        match self.login(Arc::clone(&client), username).await {
             Ok(data) => {
                 self.send_success(
                     client,
@@ -86,7 +91,7 @@ pub trait TicketGrantingProtocol: Server {
 
     async fn handle_login_ex(
         &self,
-        client: &mut ClientConnection,
+        client: Arc<RwLock<ClientConnection>>,
         request: &RMCRequest,
     ) -> NexResult<()> {
         let parameters = request.parameters.as_slice();
@@ -112,7 +117,7 @@ pub trait TicketGrantingProtocol: Server {
         }
 
         match self
-            .login_ex(client, username, data_holder.into_object())
+            .login_ex(Arc::clone(&client), username, data_holder.into_object())
             .await
         {
             Ok(data) => {
@@ -141,7 +146,7 @@ pub trait TicketGrantingProtocol: Server {
 
     async fn handle_request_ticket(
         &self,
-        client: &mut ClientConnection,
+        client: Arc<RwLock<ClientConnection>>,
         request: &RMCRequest,
     ) -> NexResult<()> {
         let parameters = request.parameters.as_slice();
@@ -158,7 +163,10 @@ pub trait TicketGrantingProtocol: Server {
             .read_stream_le()
             .map_err(|_| "[TicketGrantingProtocol::request_ticket] Failed to read server pid")?;
 
-        match self.request_ticket(client, user_pid, server_pid).await {
+        match self
+            .request_ticket(Arc::clone(&client), user_pid, server_pid)
+            .await
+        {
             Ok(data) => {
                 self.send_success(
                     client,
@@ -185,7 +193,7 @@ pub trait TicketGrantingProtocol: Server {
 
     async fn handle_get_pid(
         &self,
-        client: &mut ClientConnection,
+        client: Arc<RwLock<ClientConnection>>,
         request: &RMCRequest,
     ) -> NexResult<()> {
         let parameters = request.parameters.as_slice();
@@ -199,7 +207,7 @@ pub trait TicketGrantingProtocol: Server {
             return Err("[TicketGrantingProtocol::get_pid] Failed to read username".into());
         }
 
-        match self.get_pid(client, username).await {
+        match self.get_pid(Arc::clone(&client), username).await {
             Ok(data) => {
                 self.send_success(
                     client,
@@ -226,7 +234,7 @@ pub trait TicketGrantingProtocol: Server {
 
     async fn handle_get_name(
         &self,
-        client: &mut ClientConnection,
+        client: Arc<RwLock<ClientConnection>>,
         request: &RMCRequest,
     ) -> NexResult<()> {
         let parameters = request.parameters.as_slice();
@@ -241,7 +249,7 @@ pub trait TicketGrantingProtocol: Server {
             .read_stream_le()
             .map_err(|_| "[TicketGrantingProtocol::get_name] Failed to read user PID")?;
 
-        match self.get_name(client, user_pid).await {
+        match self.get_name(Arc::clone(&client), user_pid).await {
             Ok(data) => {
                 self.send_success(
                     client,

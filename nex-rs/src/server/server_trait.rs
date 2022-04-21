@@ -206,8 +206,12 @@ pub trait Server: EventHandler {
         }
     }
 
-    async fn find_client<'a>(&self, clients: &'a Vec<RwLock<ClientConnection>>, addr: SocketAddr) -> Option<&'a RwLock<ClientConnection>> {
-        for client in clients.iter(){
+    async fn find_client<'a>(
+        &self,
+        clients: &'a [RwLock<ClientConnection>],
+        addr: SocketAddr,
+    ) -> Option<&'a RwLock<ClientConnection>> {
+        for client in clients.iter() {
             if client.read().await.get_address() == addr {
                 return Some(client);
             }
@@ -215,7 +219,11 @@ pub trait Server: EventHandler {
         None
     }
 
-    fn create_client<'a>(&self, clients: &'a mut Vec<RwLock<ClientConnection>>, addr: SocketAddr) -> &'a RwLock<ClientConnection> {
+    fn create_client<'a>(
+        &self,
+        clients: &'a mut Vec<RwLock<ClientConnection>>,
+        addr: SocketAddr,
+    ) -> &'a RwLock<ClientConnection> {
         let settings = &self.get_base().settings;
         let new_client = RwLock::new(ClientConnection::new(
             addr,
@@ -232,17 +240,13 @@ pub trait Server: EventHandler {
 
         let mut clients = client_list_rwlock.read().await;
 
-
-        let mut client = if let Some(client) = self.find_client(&clients, peer).await {
-            Some(client)
-        } else {
-            drop(clients);
-            let mut clients = client_list_rwlock.write().await;
-            self.create_client(&mut clients, peer);
-            None
-        };
+        let mut client = self.find_client(&clients, peer).await;
 
         if client.is_none() {
+            {
+                let mut clients = client_list_rwlock.write().await;
+                self.create_client(&mut clients, peer);
+            }
             clients = client_list_rwlock.read().await;
             client = self.find_client(&clients, peer).await;
         }
@@ -312,7 +316,7 @@ pub trait Server: EventHandler {
 
         if flags.needs_ack()
             && (packet_type != PacketType::Connect
-            || (packet_type == PacketType::Connect && payload.is_empty()))
+                || (packet_type == PacketType::Connect && payload.is_empty()))
         {
             self.send_acknowledge_packet(packet, client, None).await?;
         }

@@ -70,8 +70,7 @@ pub trait Server: EventHandler {
             loop {
                 invertal.tick().await;
 
-                for client in clients_lock.write().await.iter()
-                {
+                for client in clients_lock.write().await.iter() {
                     let mut client = client.write().await;
                     if let Some(timer) = client.get_kick_timer() {
                         client.set_kick_timer(Some(timer.saturating_sub(3)));

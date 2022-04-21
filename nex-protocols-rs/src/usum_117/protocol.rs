@@ -5,8 +5,6 @@ use nex_rs::{
 };
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 
-
-
 pub const USUM_117_PROTOCOL_ID: u8 = 0x75;
 
 #[derive(Debug, Clone, Copy, PartialEq, TryFromPrimitive, IntoPrimitive)]
@@ -21,20 +19,11 @@ pub enum USUM117Method {
 
 #[async_trait]
 pub trait USUM117Protocol: Server {
-    async fn unknown_1(&self, client: &mut ClientConnection)
-        -> Result<Vec<u8>, ResultCode>;
-    async fn unknown_7(&self, client: &mut ClientConnection)
-        -> Result<Vec<u8>, ResultCode>;
-    async fn unknown_9(&self, client: &mut ClientConnection)
-        -> Result<Vec<u8>, ResultCode>;
-    async fn unknown_10(
-        &self,
-        client: &mut ClientConnection,
-    ) -> Result<Vec<u8>, ResultCode>;
-    async fn unknown_15(
-        &self,
-        client: &mut ClientConnection,
-    ) -> Result<Vec<u8>, ResultCode>;
+    async fn unknown_1(&self, client: &mut ClientConnection) -> Result<Vec<u8>, ResultCode>;
+    async fn unknown_7(&self, client: &mut ClientConnection) -> Result<Vec<u8>, ResultCode>;
+    async fn unknown_9(&self, client: &mut ClientConnection) -> Result<Vec<u8>, ResultCode>;
+    async fn unknown_10(&self, client: &mut ClientConnection) -> Result<Vec<u8>, ResultCode>;
+    async fn unknown_15(&self, client: &mut ClientConnection) -> Result<Vec<u8>, ResultCode>;
 
     async fn handle_unknown_1(
         &self,

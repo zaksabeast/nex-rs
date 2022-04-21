@@ -10,8 +10,6 @@ use nex_rs::{
 use no_std_io::{StreamContainer, StreamReader};
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 
-
-
 pub const MATCHMAKE_EXTENSION_PROTOCOL_ID: u8 = 0x6D;
 
 #[derive(Debug, Clone, Copy, PartialEq, TryFromPrimitive, IntoPrimitive)]
@@ -150,11 +148,7 @@ pub trait MatchmakeExtensionProtocol: Server {
             .map_err(|_| "Can not read result range")?;
 
         match self
-            .browse_matchmake_session(
-                client,
-                matchmake_session_search_criteria,
-                result_range,
-            )
+            .browse_matchmake_session(client, matchmake_session_search_criteria, result_range)
             .await
         {
             Ok(data) => {

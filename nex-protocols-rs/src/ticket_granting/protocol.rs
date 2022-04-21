@@ -9,8 +9,6 @@ use nex_rs::{
 };
 use no_std_io::{StreamContainer, StreamReader};
 
-
-
 pub const AUTHENTICATION_PROTOCOL_ID: u8 = 0xA;
 
 #[async_trait]
@@ -42,10 +40,7 @@ pub trait TicketGrantingProtocol: Server {
         client: &mut ClientConnection,
         user_pid: u32,
     ) -> Result<Vec<u8>, ResultCode>;
-    async fn login_with_param(
-        &self,
-        client: &mut ClientConnection,
-    ) -> Result<Vec<u8>, ResultCode>;
+    async fn login_with_param(&self, client: &mut ClientConnection) -> Result<Vec<u8>, ResultCode>;
 
     async fn handle_login(
         &self,
@@ -163,10 +158,7 @@ pub trait TicketGrantingProtocol: Server {
             .read_stream_le()
             .map_err(|_| "[TicketGrantingProtocol::request_ticket] Failed to read server pid")?;
 
-        match self
-            .request_ticket(client, user_pid, server_pid)
-            .await
-        {
+        match self.request_ticket(client, user_pid, server_pid).await {
             Ok(data) => {
                 self.send_success(
                     client,

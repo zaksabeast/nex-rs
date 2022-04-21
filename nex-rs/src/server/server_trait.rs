@@ -162,11 +162,7 @@ pub trait Server: EventHandler {
         Ok(())
     }
 
-    async fn should_ignore_packet(
-        &self,
-        client: &mut ClientConnection,
-        packet: &PacketV1,
-    ) -> bool {
+    async fn should_ignore_packet(&self, client: &mut ClientConnection, packet: &PacketV1) -> bool {
         let packet_type = packet.get_packet_type();
 
         // Ignore packets from disconnected clients
@@ -183,11 +179,7 @@ pub trait Server: EventHandler {
         false
     }
 
-    fn handle_connection_init(
-        &self,
-        client: &mut ClientConnection,
-        packet: &PacketV1,
-    ) {
+    fn handle_connection_init(&self, client: &mut ClientConnection, packet: &PacketV1) {
         match packet.get_packet_type() {
             PacketType::Syn => {
                 client.reset();
@@ -206,11 +198,7 @@ pub trait Server: EventHandler {
         }
     }
 
-    fn increment_sequence_id_in(
-        &self,
-        client: &mut ClientConnection,
-        packet: &PacketV1,
-    ) {
+    fn increment_sequence_id_in(&self, client: &mut ClientConnection, packet: &PacketV1) {
         // Pings have their own sequence ids
         if packet.get_packet_type() != PacketType::Ping {
             client.increment_sequence_id_in();
@@ -257,10 +245,7 @@ pub trait Server: EventHandler {
         let mut client = client_rwlock.write().await;
         let packet = client.read_packet(message)?;
 
-        if self
-            .should_ignore_packet(&mut client, &packet)
-            .await
-        {
+        if self.should_ignore_packet(&mut client, &packet).await {
             return Ok(());
         }
 
@@ -271,10 +256,8 @@ pub trait Server: EventHandler {
         }
 
         self.handle_connection_init(&mut client, &packet);
-        self.acknowledge_packet(&mut client, &packet)
-            .await?;
-        self.emit_packet_events(&mut client, &packet)
-            .await?;
+        self.acknowledge_packet(&mut client, &packet).await?;
+        self.emit_packet_events(&mut client, &packet).await?;
         self.increment_sequence_id_in(&mut client, &packet);
         drop(client);
         self.handle_disconnect(peer, &packet).await;
@@ -347,11 +330,8 @@ pub trait Server: EventHandler {
 
         match ack_packet.get_packet_type() {
             PacketType::Syn => {
-                ack_packet.set_connection_signature(
-                    client
-                        .get_server_connection_signature()
-                        .to_vec(),
-                );
+                ack_packet
+                    .set_connection_signature(client.get_server_connection_signature().to_vec());
                 ack_packet.set_supported_functions(packet.get_supported_functions());
                 ack_packet.set_maximum_substream_id(0);
             }
@@ -398,8 +378,7 @@ pub trait Server: EventHandler {
         call_id: u32,
         data: Data,
     ) -> ServerResult<()> {
-        let packet = client
-            .new_rmc_success(protocol_id, method_id, call_id, data);
+        let packet = client.new_rmc_success(protocol_id, method_id, call_id, data);
         self.send(client, packet).await
     }
 
@@ -411,16 +390,11 @@ pub trait Server: EventHandler {
         call_id: u32,
         error_code: u32,
     ) -> ServerResult<()> {
-        let packet = client
-            .new_rmc_error(protocol_id, method_id, call_id, error_code);
+        let packet = client.new_rmc_error(protocol_id, method_id, call_id, error_code);
         self.send(client, packet).await
     }
 
-    async fn send(
-        &self,
-        client: &mut ClientConnection,
-        mut packet: PacketV1,
-    ) -> ServerResult<()> {
+    async fn send(&self, client: &mut ClientConnection, mut packet: PacketV1) -> ServerResult<()> {
         let fragment_size: usize = self.get_base().settings.fragment_size.into();
         let data = packet.get_payload().to_vec();
         let fragment_count = data.len() / fragment_size;
@@ -440,8 +414,7 @@ pub trait Server: EventHandler {
                 self.send_fragment(client, packet, 0).await?;
             } else {
                 packet.set_payload(data[..fragment_size].to_vec());
-                self.send_fragment(client, packet, fragment_id)
-                    .await?;
+                self.send_fragment(client, packet, fragment_id).await?;
                 fragment_data = &data[fragment_size..];
             }
         }
@@ -464,11 +437,7 @@ pub trait Server: EventHandler {
         self.send_raw(client, &encoded_packet).await
     }
 
-    async fn send_raw(
-        &self,
-        client: &mut ClientConnection,
-        data: &[u8],
-    ) -> ServerResult<usize> {
+    async fn send_raw(&self, client: &mut ClientConnection, data: &[u8]) -> ServerResult<usize> {
         let socket = self.get_socket()?;
         socket
             .send_to(data, client.get_address())

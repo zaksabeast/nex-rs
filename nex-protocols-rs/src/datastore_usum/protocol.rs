@@ -16,8 +16,6 @@ use nex_rs::{
 use no_std_io::{StreamContainer, StreamReader};
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 
-
-
 pub const DATASTORE_PROTOCOL_ID: u8 = 0x73;
 
 #[derive(Debug, Clone, Copy, PartialEq, TryFromPrimitive, IntoPrimitive)]
@@ -162,10 +160,7 @@ pub trait DataStoreProtocol: Server {
             .read_stream_le::<bool>()
             .map_err(|_| "Can not read fetch ratings bool")?;
 
-        match self
-            .rate_object(client, target, param, fetch_ratings)
-            .await
-        {
+        match self.rate_object(client, target, param, fetch_ratings).await {
             Ok(data) => {
                 self.send_success(
                     client,
@@ -203,10 +198,7 @@ pub trait DataStoreProtocol: Server {
             .read_stream_le::<NexStruct<DataStorePreparePostParam>>()
             .map_err(|_| "Can not read DataStorePreparePostParam")?;
 
-        match self
-            .post_meta_binary(client, param.into_raw())
-            .await
-        {
+        match self.post_meta_binary(client, param.into_raw()).await {
             Ok(data) => {
                 self.send_success(
                     client,
@@ -312,10 +304,7 @@ pub trait DataStoreProtocol: Server {
             .read_stream_le::<NexStruct<GlobalTradeStationUploadPokemonParam>>()
             .map_err(|_| "Can not read GlobalTradeStationUploadPokemonParam")?;
 
-        match self
-            .upload_pokemon(client, param.into_raw())
-            .await
-        {
+        match self.upload_pokemon(client, param.into_raw()).await {
             Ok(data) => {
                 self.send_success(
                     client,
@@ -353,10 +342,7 @@ pub trait DataStoreProtocol: Server {
             .read_stream_le::<NexStruct<GlobalTradeStationPrepareTradePokemonParam>>()
             .map_err(|_| "Can not read GlobalTradeStationPrepareTradePokemonParam")?;
 
-        match self
-            .prepare_trade_pokemon(client, param.into_raw())
-            .await
-        {
+        match self.prepare_trade_pokemon(client, param.into_raw()).await {
             Ok(data) => {
                 self.send_success(
                     client,
@@ -394,10 +380,7 @@ pub trait DataStoreProtocol: Server {
             .read_stream_le::<NexStruct<GlobalTradeStationTradePokemonParam>>()
             .map_err(|_| "Can not read GlobalTradeStationTradePokemonParam")?;
 
-        match self
-            .trade_pokemon(client, param.into_raw())
-            .await
-        {
+        match self.trade_pokemon(client, param.into_raw()).await {
             Ok(data) => {
                 self.send_success(
                     client,
@@ -435,10 +418,7 @@ pub trait DataStoreProtocol: Server {
             .read_stream_le::<NexStruct<GlobalTradeStationDownloadOtherPokemonParam>>()
             .map_err(|_| "Can not read GlobalTradeStationDownloadOtherPokemonParam")?;
 
-        match self
-            .download_other_pokemon(client, param.into_raw())
-            .await
-        {
+        match self.download_other_pokemon(client, param.into_raw()).await {
             Ok(data) => {
                 self.send_success(
                     client,
@@ -476,10 +456,7 @@ pub trait DataStoreProtocol: Server {
             .read_stream_le::<NexStruct<GlobalTradeStationDownloadMyPokemonParam>>()
             .map_err(|_| "Can not read GlobalTradeStationDownloadMyPokemonParam")?;
 
-        match self
-            .download_my_pokemon(client, param.into_raw())
-            .await
-        {
+        match self.download_my_pokemon(client, param.into_raw()).await {
             Ok(data) => {
                 self.send_success(
                     client,
@@ -517,10 +494,7 @@ pub trait DataStoreProtocol: Server {
             .read_stream_le::<NexStruct<GlobalTradeStationDeletePokemonParam>>()
             .map_err(|_| "Can not read GlobalTradeStationDeletePokemonParam")?;
 
-        match self
-            .delete_pokemon(client, param.into_raw())
-            .await
-        {
+        match self.delete_pokemon(client, param.into_raw()).await {
             Ok(_) => {
                 self.send_success(
                     client,
@@ -558,10 +532,7 @@ pub trait DataStoreProtocol: Server {
             .read_stream_le::<NexStruct<GlobalTradeStationSearchPokemonParam>>()
             .map_err(|_| "Can not read GlobalTradeStationSearchPokemonParam")?;
 
-        match self
-            .search_pokemon_v2(client, param.into_raw())
-            .await
-        {
+        match self.search_pokemon_v2(client, param.into_raw()).await {
             Ok(data) => {
                 self.send_success(
                     client,

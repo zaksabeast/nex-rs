@@ -5,8 +5,6 @@ use nex_rs::{
 };
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 
-
-
 pub const UTILITY_PROTOCOL_ID: u8 = 0x6E;
 
 #[derive(Debug, Clone, Copy, PartialEq, TryFromPrimitive, IntoPrimitive)]

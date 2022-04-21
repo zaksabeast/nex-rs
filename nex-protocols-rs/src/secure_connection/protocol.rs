@@ -9,8 +9,6 @@ use nex_rs::{
 use no_std_io::{StreamContainer, StreamReader};
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 
-
-
 pub const SECURE_CONNECTION_PROTOCOL_ID: u8 = 0xB;
 
 #[derive(Debug, Clone, Copy, PartialEq, TryFromPrimitive, IntoPrimitive)]
@@ -167,10 +165,7 @@ pub trait SecureConnectionProtocol: Server {
             .read_stream_le::<u32>()
             .map_err(|_| "Can not read pid target")?;
 
-        match self
-            .request_urls(client, cid_target, pid_target)
-            .await
-        {
+        match self.request_urls(client, cid_target, pid_target).await {
             Ok(data) => {
                 self.send_success(
                     client,
@@ -211,10 +206,7 @@ pub trait SecureConnectionProtocol: Server {
             .read_stream_le::<DataHolder<NexString>>()
             .map_err(|_| "Can not read custom data")?;
 
-        match self
-            .register_ex(client, my_urls, custom_data)
-            .await
-        {
+        match self.register_ex(client, my_urls, custom_data).await {
             Ok(data) => {
                 self.send_success(
                     client,

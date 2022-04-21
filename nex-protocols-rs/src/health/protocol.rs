@@ -5,8 +5,6 @@ use nex_rs::{
 };
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 
-
-
 #[derive(Debug, Clone, Copy, PartialEq, TryFromPrimitive, IntoPrimitive)]
 #[repr(u32)]
 pub enum HealthMethod {
@@ -18,22 +16,11 @@ pub enum HealthMethod {
 
 #[async_trait]
 pub trait HealthProtocol: Server {
-    async fn ping_daemon(
-        &self,
-        client: &mut ClientConnection,
-    ) -> Result<Vec<u8>, ResultCode>;
-    async fn ping_database(
-        &self,
-        client: &mut ClientConnection,
-    ) -> Result<Vec<u8>, ResultCode>;
-    async fn run_sanity_check(
-        &self,
-        client: &mut ClientConnection,
-    ) -> Result<Vec<u8>, ResultCode>;
-    async fn fix_sanity_errors(
-        &self,
-        client: &mut ClientConnection,
-    ) -> Result<Vec<u8>, ResultCode>;
+    async fn ping_daemon(&self, client: &mut ClientConnection) -> Result<Vec<u8>, ResultCode>;
+    async fn ping_database(&self, client: &mut ClientConnection) -> Result<Vec<u8>, ResultCode>;
+    async fn run_sanity_check(&self, client: &mut ClientConnection) -> Result<Vec<u8>, ResultCode>;
+    async fn fix_sanity_errors(&self, client: &mut ClientConnection)
+        -> Result<Vec<u8>, ResultCode>;
 
     async fn handle_ping_daemon(
         &self,

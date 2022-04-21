@@ -5,8 +5,6 @@ use nex_rs::{
 };
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 
-
-
 #[derive(Debug, Clone, Copy, PartialEq, TryFromPrimitive, IntoPrimitive)]
 #[repr(u32)]
 pub enum MonitoringMethod {
@@ -16,10 +14,7 @@ pub enum MonitoringMethod {
 
 #[async_trait]
 pub trait MonitoringProtocol: Server {
-    async fn ping_daemon(
-        &self,
-        client: &mut ClientConnection,
-    ) -> Result<Vec<u8>, ResultCode>;
+    async fn ping_daemon(&self, client: &mut ClientConnection) -> Result<Vec<u8>, ResultCode>;
     async fn get_cluster_members(
         &self,
         client: &mut ClientConnection,

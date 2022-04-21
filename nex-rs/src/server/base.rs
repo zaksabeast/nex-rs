@@ -9,7 +9,7 @@ pub struct BaseServer {
     pub(super) settings: ServerSettings,
     pub(super) socket: Option<UdpSocket>,
     pub(super) ping_kick_thread: Option<JoinHandle<()>>,
-    pub(super) clients: Arc<RwLock<Vec<Arc<RwLock<ClientConnection>>>>>,
+    pub(super) clients: Arc<RwLock<Vec<RwLock<ClientConnection>>>>,
 }
 
 impl BaseServer {

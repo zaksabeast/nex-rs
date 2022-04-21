@@ -15,7 +15,7 @@ pub trait Server: EventHandler {
     fn get_base(&self) -> &BaseServer;
     fn get_mut_base(&mut self) -> &mut BaseServer;
 
-    fn get_clients(&self) -> Arc<RwLock<Vec<Arc<RwLock<ClientConnection>>>>> {
+    fn get_clients(&self) -> Arc<RwLock<Vec<RwLock<ClientConnection>>>> {
         Arc::clone(&self.get_base().clients)
     }
 
@@ -206,38 +206,49 @@ pub trait Server: EventHandler {
         }
     }
 
-    async fn find_or_create_client(&self, addr: SocketAddr) -> Arc<RwLock<ClientConnection>> {
-        let clients = self.get_base().clients.read().await;
-
-        let mut client_index = None;
-        for (i, client) in clients.iter().enumerate() {
+    async fn find_client<'a>(&self, clients: &'a Vec<RwLock<ClientConnection>>, addr: SocketAddr) -> Option<&'a RwLock<ClientConnection>> {
+        for client in clients.iter(){
             if client.read().await.get_address() == addr {
-                client_index = Some(i);
-                break;
+                return Some(client);
             }
         }
+        None
+    }
 
-        match client_index {
-            Some(i) => Arc::clone(&clients[i]),
-            None => {
-                drop(clients);
-                let mut clients = self.get_base().clients.write().await;
-                let settings = &self.get_base().settings;
-                let new_client = Arc::new(RwLock::new(ClientConnection::new(
-                    addr,
-                    settings.create_client_context(),
-                )));
-                clients.push(Arc::clone(&new_client));
-                new_client
-            }
-        }
+    fn create_client<'a>(&self, clients: &'a mut Vec<RwLock<ClientConnection>>, addr: SocketAddr) -> &'a RwLock<ClientConnection> {
+        let settings = &self.get_base().settings;
+        let new_client = RwLock::new(ClientConnection::new(
+            addr,
+            settings.create_client_context(),
+        ));
+        clients.push(new_client);
+        clients.last().unwrap()
     }
 
     async fn handle_socket_message(&self, message: Vec<u8>, peer: SocketAddr) -> NexResult<()> {
         let base = self.get_base();
 
-        let client_rwlock = self.find_or_create_client(peer).await;
-        let mut client = client_rwlock.write().await;
+        let client_list_rwlock = Arc::clone(&self.get_base().clients);
+
+        let mut clients = client_list_rwlock.read().await;
+
+
+        let mut client = if let Some(client) = self.find_client(&clients, peer).await {
+            Some(client)
+        } else {
+            drop(clients);
+            let mut clients = client_list_rwlock.write().await;
+            self.create_client(&mut clients, peer);
+            None
+        };
+
+        if client.is_none() {
+            clients = client_list_rwlock.read().await;
+            client = self.find_client(&clients, peer).await;
+        }
+
+        let mut client = client.unwrap().write().await;
+
         let packet = client.read_packet(message)?;
 
         if self.should_ignore_packet(&mut client, &packet) {
@@ -301,7 +312,7 @@ pub trait Server: EventHandler {
 
         if flags.needs_ack()
             && (packet_type != PacketType::Connect
-                || (packet_type == PacketType::Connect && payload.is_empty()))
+            || (packet_type == PacketType::Connect && payload.is_empty()))
         {
             self.send_acknowledge_packet(packet, client, None).await?;
         }
@@ -516,7 +527,7 @@ mod test {
         let server = TestServer::default();
         let client_rwlock = server.get_clients();
         let mut clients = client_rwlock.write().await;
-        clients.push(Arc::new(RwLock::new(client)));
+        clients.push(RwLock::new(client));
 
         server
     }

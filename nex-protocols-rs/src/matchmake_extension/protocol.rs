@@ -9,8 +9,8 @@ use nex_rs::{
 };
 use no_std_io::{StreamContainer, StreamReader};
 use num_enum::{IntoPrimitive, TryFromPrimitive};
-use std::sync::Arc;
-use tokio::sync::RwLock;
+
+
 
 pub const MATCHMAKE_EXTENSION_PROTOCOL_ID: u8 = 0x6D;
 
@@ -29,39 +29,39 @@ pub enum MatchmakeExtensionMethod {
 pub trait MatchmakeExtensionProtocol: Server {
     async fn close_participation(
         &self,
-        client: Arc<RwLock<ClientConnection>>,
+        client: &mut ClientConnection,
         gid: u32,
     ) -> Result<Vec<u8>, ResultCode>;
     async fn open_participation(
         &self,
-        client: Arc<RwLock<ClientConnection>>,
+        client: &mut ClientConnection,
         gid: u32,
     ) -> Result<Vec<u8>, ResultCode>;
     async fn browse_matchmake_session(
         &self,
-        client: Arc<RwLock<ClientConnection>>,
+        client: &mut ClientConnection,
         matchmake_session_search_criteria: MatchmakeSessionSearchCriteria,
         result_range: ResultRange,
     ) -> Result<Vec<u8>, ResultCode>;
     async fn browse_matchmake_session_with_host_urls(
         &self,
-        client: Arc<RwLock<ClientConnection>>,
+        client: &mut ClientConnection,
         matchmake_session_search_criteria: MatchmakeSessionSearchCriteria,
         result_range: ResultRange,
     ) -> Result<Vec<u8>, ResultCode>;
     async fn get_attraction_status(
         &self,
-        client: Arc<RwLock<ClientConnection>>,
+        client: &mut ClientConnection,
     ) -> Result<Vec<u8>, ResultCode>;
     async fn simple_matchmake(
         &self,
-        client: Arc<RwLock<ClientConnection>>,
+        client: &mut ClientConnection,
         group_id: u32,
     ) -> Result<Vec<u8>, ResultCode>;
 
     async fn handle_close_participation(
         &self,
-        client: Arc<RwLock<ClientConnection>>,
+        client: &mut ClientConnection,
         request: &RMCRequest,
     ) -> NexResult<()> {
         let parameters = request.parameters.as_slice();
@@ -71,7 +71,7 @@ pub trait MatchmakeExtensionProtocol: Server {
             .read_stream_le::<u32>()
             .map_err(|_| "Can not read group id")?;
 
-        match self.close_participation(Arc::clone(&client), gid).await {
+        match self.close_participation(client, gid).await {
             Ok(data) => {
                 self.send_success(
                     client,
@@ -98,7 +98,7 @@ pub trait MatchmakeExtensionProtocol: Server {
 
     async fn handle_open_participation(
         &self,
-        client: Arc<RwLock<ClientConnection>>,
+        client: &mut ClientConnection,
         request: &RMCRequest,
     ) -> NexResult<()> {
         let parameters = request.parameters.as_slice();
@@ -108,7 +108,7 @@ pub trait MatchmakeExtensionProtocol: Server {
             .read_stream_le::<u32>()
             .map_err(|_| "Can not read group id")?;
 
-        match self.open_participation(Arc::clone(&client), gid).await {
+        match self.open_participation(client, gid).await {
             Ok(data) => {
                 self.send_success(
                     client,
@@ -135,7 +135,7 @@ pub trait MatchmakeExtensionProtocol: Server {
 
     async fn handle_browse_matchmake_session(
         &self,
-        client: Arc<RwLock<ClientConnection>>,
+        client: &mut ClientConnection,
         request: &RMCRequest,
     ) -> NexResult<()> {
         let parameters = request.parameters.as_slice();
@@ -151,7 +151,7 @@ pub trait MatchmakeExtensionProtocol: Server {
 
         match self
             .browse_matchmake_session(
-                Arc::clone(&client),
+                client,
                 matchmake_session_search_criteria,
                 result_range,
             )
@@ -183,7 +183,7 @@ pub trait MatchmakeExtensionProtocol: Server {
 
     async fn handle_browse_matchmake_session_with_host_urls(
         &self,
-        client: Arc<RwLock<ClientConnection>>,
+        client: &mut ClientConnection,
         request: &RMCRequest,
     ) -> NexResult<()> {
         let parameters = request.parameters.as_slice();
@@ -199,7 +199,7 @@ pub trait MatchmakeExtensionProtocol: Server {
 
         match self
             .browse_matchmake_session_with_host_urls(
-                Arc::clone(&client),
+                client,
                 matchmake_session_search_criteria,
                 result_range,
             )
@@ -231,10 +231,10 @@ pub trait MatchmakeExtensionProtocol: Server {
 
     async fn handle_get_attraction_status(
         &self,
-        client: Arc<RwLock<ClientConnection>>,
+        client: &mut ClientConnection,
         request: &RMCRequest,
     ) -> NexResult<()> {
-        match self.get_attraction_status(Arc::clone(&client)).await {
+        match self.get_attraction_status(client).await {
             Ok(data) => {
                 self.send_success(
                     client,
@@ -261,7 +261,7 @@ pub trait MatchmakeExtensionProtocol: Server {
 
     async fn handle_simple_matchmake(
         &self,
-        client: Arc<RwLock<ClientConnection>>,
+        client: &mut ClientConnection,
         request: &RMCRequest,
     ) -> NexResult<()> {
         let parameters = request.parameters.as_slice();
@@ -271,7 +271,7 @@ pub trait MatchmakeExtensionProtocol: Server {
             .read_stream_le::<u32>()
             .map_err(|_| "Can not read group id")?;
 
-        match self.simple_matchmake(Arc::clone(&client), group_id).await {
+        match self.simple_matchmake(client, group_id).await {
             Ok(data) => {
                 self.send_success(
                     client,

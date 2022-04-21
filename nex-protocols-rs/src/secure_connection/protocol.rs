@@ -8,8 +8,8 @@ use nex_rs::{
 };
 use no_std_io::{StreamContainer, StreamReader};
 use num_enum::{IntoPrimitive, TryFromPrimitive};
-use std::sync::Arc;
-use tokio::sync::RwLock;
+
+
 
 pub const SECURE_CONNECTION_PROTOCOL_ID: u8 = 0xB;
 
@@ -30,49 +30,49 @@ pub enum SecureConnectionMethod {
 pub trait SecureConnectionProtocol: Server {
     async fn register(
         &self,
-        client: Arc<RwLock<ClientConnection>>,
+        client: &mut ClientConnection,
         my_urls: NexList<NexString>,
     ) -> Result<Vec<u8>, ResultCode>;
     async fn request_connection_data(
         &self,
-        client: Arc<RwLock<ClientConnection>>,
+        client: &mut ClientConnection,
         cid_target: u32,
         pid_target: u32,
     ) -> Result<Vec<u8>, ResultCode>;
     async fn request_urls(
         &self,
-        client: Arc<RwLock<ClientConnection>>,
+        client: &mut ClientConnection,
         cid_target: u32,
         pid_target: u32,
     ) -> Result<Vec<u8>, ResultCode>;
     async fn register_ex(
         &self,
-        client: Arc<RwLock<ClientConnection>>,
+        client: &mut ClientConnection,
         my_urls: NexList<NexString>,
         custom_data: DataHolder<NexString>,
     ) -> Result<Vec<u8>, ResultCode>;
-    async fn test_connectivity(&self, client: Arc<RwLock<ClientConnection>>) -> NexResult<()>;
+    async fn test_connectivity(&self, client: &mut ClientConnection) -> NexResult<()>;
     async fn update_urls(
         &self,
-        client: Arc<RwLock<ClientConnection>>,
+        client: &mut ClientConnection,
         my_urls: NexList<NexString>,
     ) -> NexResult<()>;
     async fn replace_url(
         &self,
-        client: Arc<RwLock<ClientConnection>>,
+        client: &mut ClientConnection,
         target: NexString,
         url: NexString,
     ) -> NexResult<()>;
     async fn send_report(
         &self,
-        client: Arc<RwLock<ClientConnection>>,
+        client: &mut ClientConnection,
         report_id: u32,
         report_data: NexQBuffer,
     ) -> NexResult<()>;
 
     async fn handle_register(
         &self,
-        client: Arc<RwLock<ClientConnection>>,
+        client: &mut ClientConnection,
         request: &RMCRequest,
     ) -> NexResult<()> {
         let parameters = request.parameters.as_slice();
@@ -82,7 +82,7 @@ pub trait SecureConnectionProtocol: Server {
             .read_stream_le::<NexList<NexString>>()
             .map_err(|_| "Can not read my urls")?;
 
-        match self.register(Arc::clone(&client), my_urls).await {
+        match self.register(client, my_urls).await {
             Ok(data) => {
                 self.send_success(
                     client,
@@ -109,7 +109,7 @@ pub trait SecureConnectionProtocol: Server {
 
     async fn handle_request_connection_data(
         &self,
-        client: Arc<RwLock<ClientConnection>>,
+        client: &mut ClientConnection,
         request: &RMCRequest,
     ) -> NexResult<()> {
         let parameters = request.parameters.as_slice();
@@ -124,7 +124,7 @@ pub trait SecureConnectionProtocol: Server {
             .map_err(|_| "Can not read pid target")?;
 
         match self
-            .request_connection_data(Arc::clone(&client), cid_target, pid_target)
+            .request_connection_data(client, cid_target, pid_target)
             .await
         {
             Ok(data) => {
@@ -153,7 +153,7 @@ pub trait SecureConnectionProtocol: Server {
 
     async fn handle_request_urls(
         &self,
-        client: Arc<RwLock<ClientConnection>>,
+        client: &mut ClientConnection,
         request: &RMCRequest,
     ) -> NexResult<()> {
         let parameters = request.parameters.as_slice();
@@ -168,7 +168,7 @@ pub trait SecureConnectionProtocol: Server {
             .map_err(|_| "Can not read pid target")?;
 
         match self
-            .request_urls(Arc::clone(&client), cid_target, pid_target)
+            .request_urls(client, cid_target, pid_target)
             .await
         {
             Ok(data) => {
@@ -197,7 +197,7 @@ pub trait SecureConnectionProtocol: Server {
 
     async fn handle_register_ex(
         &self,
-        client: Arc<RwLock<ClientConnection>>,
+        client: &mut ClientConnection,
         request: &RMCRequest,
     ) -> NexResult<()> {
         let parameters = request.parameters.as_slice();
@@ -212,7 +212,7 @@ pub trait SecureConnectionProtocol: Server {
             .map_err(|_| "Can not read custom data")?;
 
         match self
-            .register_ex(Arc::clone(&client), my_urls, custom_data)
+            .register_ex(client, my_urls, custom_data)
             .await
         {
             Ok(data) => {
@@ -241,7 +241,7 @@ pub trait SecureConnectionProtocol: Server {
 
     async fn handle_test_connectivity(
         &self,
-        client: Arc<RwLock<ClientConnection>>,
+        client: &mut ClientConnection,
         _request: &RMCRequest,
     ) -> NexResult<()> {
         self.test_connectivity(client).await
@@ -249,7 +249,7 @@ pub trait SecureConnectionProtocol: Server {
 
     async fn handle_update_urls(
         &self,
-        client: Arc<RwLock<ClientConnection>>,
+        client: &mut ClientConnection,
         request: &RMCRequest,
     ) -> NexResult<()> {
         let parameters = request.parameters.as_slice();
@@ -264,7 +264,7 @@ pub trait SecureConnectionProtocol: Server {
 
     async fn handle_replace_url(
         &self,
-        client: Arc<RwLock<ClientConnection>>,
+        client: &mut ClientConnection,
         request: &RMCRequest,
     ) -> NexResult<()> {
         let parameters = request.parameters.as_slice();
@@ -283,7 +283,7 @@ pub trait SecureConnectionProtocol: Server {
 
     async fn handle_send_report(
         &self,
-        client: Arc<RwLock<ClientConnection>>,
+        client: &mut ClientConnection,
         request: &RMCRequest,
     ) -> NexResult<()> {
         let parameters = request.parameters.as_slice();

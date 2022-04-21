@@ -4,8 +4,8 @@ use nex_rs::{
     server::Server,
 };
 use num_enum::{IntoPrimitive, TryFromPrimitive};
-use std::sync::Arc;
-use tokio::sync::RwLock;
+
+
 
 pub const USUM_117_PROTOCOL_ID: u8 = 0x75;
 
@@ -21,27 +21,27 @@ pub enum USUM117Method {
 
 #[async_trait]
 pub trait USUM117Protocol: Server {
-    async fn unknown_1(&self, client: Arc<RwLock<ClientConnection>>)
+    async fn unknown_1(&self, client: &mut ClientConnection)
         -> Result<Vec<u8>, ResultCode>;
-    async fn unknown_7(&self, client: Arc<RwLock<ClientConnection>>)
+    async fn unknown_7(&self, client: &mut ClientConnection)
         -> Result<Vec<u8>, ResultCode>;
-    async fn unknown_9(&self, client: Arc<RwLock<ClientConnection>>)
+    async fn unknown_9(&self, client: &mut ClientConnection)
         -> Result<Vec<u8>, ResultCode>;
     async fn unknown_10(
         &self,
-        client: Arc<RwLock<ClientConnection>>,
+        client: &mut ClientConnection,
     ) -> Result<Vec<u8>, ResultCode>;
     async fn unknown_15(
         &self,
-        client: Arc<RwLock<ClientConnection>>,
+        client: &mut ClientConnection,
     ) -> Result<Vec<u8>, ResultCode>;
 
     async fn handle_unknown_1(
         &self,
-        client: Arc<RwLock<ClientConnection>>,
+        client: &mut ClientConnection,
         request: &RMCRequest,
     ) -> NexResult<()> {
-        match self.unknown_1(Arc::clone(&client)).await {
+        match self.unknown_1(client).await {
             Ok(data) => {
                 self.send_success(
                     client,
@@ -68,10 +68,10 @@ pub trait USUM117Protocol: Server {
 
     async fn handle_unknown_7(
         &self,
-        client: Arc<RwLock<ClientConnection>>,
+        client: &mut ClientConnection,
         request: &RMCRequest,
     ) -> NexResult<()> {
-        match self.unknown_7(Arc::clone(&client)).await {
+        match self.unknown_7(client).await {
             Ok(data) => {
                 self.send_success(
                     client,
@@ -98,10 +98,10 @@ pub trait USUM117Protocol: Server {
 
     async fn handle_unknown_9(
         &self,
-        client: Arc<RwLock<ClientConnection>>,
+        client: &mut ClientConnection,
         request: &RMCRequest,
     ) -> NexResult<()> {
-        match self.unknown_9(Arc::clone(&client)).await {
+        match self.unknown_9(client).await {
             Ok(data) => {
                 self.send_success(
                     client,
@@ -128,10 +128,10 @@ pub trait USUM117Protocol: Server {
 
     async fn handle_unknown_10(
         &self,
-        client: Arc<RwLock<ClientConnection>>,
+        client: &mut ClientConnection,
         request: &RMCRequest,
     ) -> NexResult<()> {
-        match self.unknown_10(Arc::clone(&client)).await {
+        match self.unknown_10(client).await {
             Ok(data) => {
                 self.send_success(
                     client,
@@ -158,10 +158,10 @@ pub trait USUM117Protocol: Server {
 
     async fn handle_unknown_15(
         &self,
-        client: Arc<RwLock<ClientConnection>>,
+        client: &mut ClientConnection,
         request: &RMCRequest,
     ) -> NexResult<()> {
-        match self.unknown_15(Arc::clone(&client)).await {
+        match self.unknown_15(client).await {
             Ok(data) => {
                 self.send_success(
                     client,

@@ -133,7 +133,7 @@ pub trait Server: EventHandler {
 
     async fn emit_packet_events(
         &self,
-        client: Arc<RwLock<ClientConnection>>,
+        client: &mut ClientConnection,
         packet: &PacketV1,
     ) -> NexResult<()> {
         match packet.get_packet_type() {
@@ -147,10 +147,10 @@ pub trait Server: EventHandler {
                 self.on_disconnect(client, packet).await?;
             }
             PacketType::Data => {
-                self.on_data(Arc::clone(&client), packet).await?;
+                self.on_data(client, packet).await?;
 
-                if client.read().await.can_decode_rmc_request(packet) {
-                    let rmc_request = client.write().await.decode_rmc_request(packet)?;
+                if client.can_decode_rmc_request(packet) {
+                    let rmc_request = client.decode_rmc_request(packet)?;
                     self.on_rmc_request(client, &rmc_request).await?;
                 }
             }
@@ -164,10 +164,9 @@ pub trait Server: EventHandler {
 
     async fn should_ignore_packet(
         &self,
-        client: Arc<RwLock<ClientConnection>>,
+        client: &mut ClientConnection,
         packet: &PacketV1,
     ) -> bool {
-        let client = client.read().await;
         let packet_type = packet.get_packet_type();
 
         // Ignore packets from disconnected clients
@@ -184,14 +183,13 @@ pub trait Server: EventHandler {
         false
     }
 
-    async fn handle_connection_init(
+    fn handle_connection_init(
         &self,
-        client: Arc<RwLock<ClientConnection>>,
+        client: &mut ClientConnection,
         packet: &PacketV1,
     ) {
         match packet.get_packet_type() {
             PacketType::Syn => {
-                let mut client = client.write().await;
                 client.reset();
                 client.set_is_connected(true);
                 client.set_kick_timer(Some(self.get_base().settings.ping_timeout));
@@ -202,21 +200,19 @@ pub trait Server: EventHandler {
             }
             PacketType::Connect => {
                 let client_connection_signature = packet.get_connection_signature().to_vec();
-                let mut client = client.write().await;
                 client.set_client_connection_signature(client_connection_signature);
             }
             _ => {}
         }
     }
 
-    async fn increment_sequence_id_in(
+    fn increment_sequence_id_in(
         &self,
-        client: Arc<RwLock<ClientConnection>>,
+        client: &mut ClientConnection,
         packet: &PacketV1,
     ) {
         // Pings have their own sequence ids
         if packet.get_packet_type() != PacketType::Ping {
-            let mut client = client.write().await;
             client.increment_sequence_id_in();
         }
     }
@@ -257,34 +253,30 @@ pub trait Server: EventHandler {
     async fn handle_socket_message(&self, message: Vec<u8>, peer: SocketAddr) -> NexResult<()> {
         let base = self.get_base();
 
-        let client = self.find_or_create_client(peer).await;
-
-        let packet = client.write().await.read_packet(message)?;
+        let client_rwlock = self.find_or_create_client(peer).await;
+        let mut client = client_rwlock.write().await;
+        let packet = client.read_packet(message)?;
 
         if self
-            .should_ignore_packet(Arc::clone(&client), &packet)
+            .should_ignore_packet(&mut client, &packet)
             .await
         {
             return Ok(());
         }
 
-        client
-            .write()
-            .await
-            .set_kick_timer(Some(base.settings.ping_timeout));
+        client.set_kick_timer(Some(base.settings.ping_timeout));
 
         if self.accept_acknowledge_packet(&packet) {
             return Ok(());
         }
 
-        self.handle_connection_init(Arc::clone(&client), &packet)
-            .await;
-        self.acknowledge_packet(Arc::clone(&client), &packet)
+        self.handle_connection_init(&mut client, &packet);
+        self.acknowledge_packet(&mut client, &packet)
             .await?;
-        self.emit_packet_events(Arc::clone(&client), &packet)
+        self.emit_packet_events(&mut client, &packet)
             .await?;
-        self.increment_sequence_id_in(Arc::clone(&client), &packet)
-            .await;
+        self.increment_sequence_id_in(&mut client, &packet);
+        drop(client);
         self.handle_disconnect(peer, &packet).await;
 
         Ok(())
@@ -306,7 +298,7 @@ pub trait Server: EventHandler {
         }
     }
 
-    async fn send_ping(&self, client: Arc<RwLock<ClientConnection>>) -> ServerResult<()> {
+    async fn send_ping(&self, client: &mut ClientConnection) -> ServerResult<()> {
         self.send(client, PacketV1::new_ping_packet()).await
     }
 
@@ -322,7 +314,7 @@ pub trait Server: EventHandler {
 
     async fn acknowledge_packet(
         &self,
-        client: Arc<RwLock<ClientConnection>>,
+        client: &mut ClientConnection,
         packet: &PacketV1,
     ) -> NexResult<()> {
         let packet_type = packet.get_packet_type();
@@ -342,7 +334,7 @@ pub trait Server: EventHandler {
     async fn send_acknowledge_packet(
         &self,
         packet: &PacketV1,
-        client: Arc<RwLock<ClientConnection>>,
+        client: &mut ClientConnection,
         payload: Option<Vec<u8>>,
     ) -> NexResult<()> {
         let mut ack_packet = packet.new_ack_packet();
@@ -357,8 +349,6 @@ pub trait Server: EventHandler {
             PacketType::Syn => {
                 ack_packet.set_connection_signature(
                     client
-                        .read()
-                        .await
                         .get_server_connection_signature()
                         .to_vec(),
                 );
@@ -394,7 +384,7 @@ pub trait Server: EventHandler {
             _ => {}
         };
 
-        let encoded_packet = &client.write().await.encode_packet(&mut ack_packet);
+        let encoded_packet = &client.encode_packet(&mut ack_packet);
         self.send_raw(client, encoded_packet).await?;
 
         Ok(())
@@ -402,37 +392,33 @@ pub trait Server: EventHandler {
 
     async fn send_success<MethodId: Into<u32> + Send, Data: Into<Vec<u8>> + Send>(
         &self,
-        client: Arc<RwLock<ClientConnection>>,
+        client: &mut ClientConnection,
         protocol_id: u8,
         method_id: MethodId,
         call_id: u32,
         data: Data,
     ) -> ServerResult<()> {
         let packet = client
-            .read()
-            .await
             .new_rmc_success(protocol_id, method_id, call_id, data);
         self.send(client, packet).await
     }
 
     async fn send_error<MethodId: Into<u32> + Send>(
         &self,
-        client: Arc<RwLock<ClientConnection>>,
+        client: &mut ClientConnection,
         protocol_id: u8,
         method_id: MethodId,
         call_id: u32,
         error_code: u32,
     ) -> ServerResult<()> {
         let packet = client
-            .read()
-            .await
             .new_rmc_error(protocol_id, method_id, call_id, error_code);
         self.send(client, packet).await
     }
 
     async fn send(
         &self,
-        client: Arc<RwLock<ClientConnection>>,
+        client: &mut ClientConnection,
         mut packet: PacketV1,
     ) -> ServerResult<()> {
         let fragment_size: usize = self.get_base().settings.fragment_size.into();
@@ -442,9 +428,8 @@ pub trait Server: EventHandler {
         let packet = &mut packet;
 
         for i in 0..=fragment_count {
-            let client_addr = client.read().await.get_address();
             let fragment_id: u8 = (i + 1).try_into().map_err(|_| Error::TooManyFragments {
-                client_addr,
+                client_addr: client.get_address(),
                 fragment_id: i + 1,
                 sequence_id: packet.get_sequence_id(),
             })?;
@@ -452,10 +437,10 @@ pub trait Server: EventHandler {
             if fragment_data.len() < fragment_size {
                 packet.set_payload(fragment_data.to_vec());
                 // Last fragment is always 0
-                self.send_fragment(Arc::clone(&client), packet, 0).await?;
+                self.send_fragment(client, packet, 0).await?;
             } else {
                 packet.set_payload(data[..fragment_size].to_vec());
-                self.send_fragment(Arc::clone(&client), packet, fragment_id)
+                self.send_fragment(client, packet, fragment_id)
                     .await?;
                 fragment_data = &data[fragment_size..];
             }
@@ -466,27 +451,27 @@ pub trait Server: EventHandler {
 
     async fn send_fragment(
         &self,
-        client: Arc<RwLock<ClientConnection>>,
+        client: &mut ClientConnection,
         packet: &mut PacketV1,
         fragment_id: u8,
     ) -> ServerResult<usize> {
-        let sequence_id = client.write().await.increment_sequence_id_out();
+        let sequence_id = client.increment_sequence_id_out();
 
         packet.set_sequence_id(sequence_id);
         packet.set_fragment_id(fragment_id);
 
-        let encoded_packet = client.write().await.encode_packet(packet);
+        let encoded_packet = client.encode_packet(packet);
         self.send_raw(client, &encoded_packet).await
     }
 
     async fn send_raw(
         &self,
-        client: Arc<RwLock<ClientConnection>>,
+        client: &mut ClientConnection,
         data: &[u8],
     ) -> ServerResult<usize> {
         let socket = self.get_socket()?;
         socket
-            .send_to(data, client.read().await.get_address())
+            .send_to(data, client.get_address())
             .await
             .map_err(|_| Error::DataSendError)
     }
@@ -509,35 +494,35 @@ mod test {
     impl EventHandler for TestServer {
         async fn on_syn(
             &self,
-            _client: Arc<RwLock<ClientConnection>>,
+            _client: &mut ClientConnection,
             _packet: &PacketV1,
         ) -> NexResult<()> {
             Ok(())
         }
         async fn on_connect(
             &self,
-            _client: Arc<RwLock<ClientConnection>>,
+            _client: &mut ClientConnection,
             _packet: &PacketV1,
         ) -> NexResult<()> {
             Ok(())
         }
         async fn on_data(
             &self,
-            _client: Arc<RwLock<ClientConnection>>,
+            _client: &mut ClientConnection,
             _packet: &PacketV1,
         ) -> NexResult<()> {
             Ok(())
         }
         async fn on_disconnect(
             &self,
-            _client: Arc<RwLock<ClientConnection>>,
+            _client: &mut ClientConnection,
             _packet: &PacketV1,
         ) -> NexResult<()> {
             Ok(())
         }
         async fn on_ping(
             &self,
-            _client: Arc<RwLock<ClientConnection>>,
+            _client: &mut ClientConnection,
             _packet: &PacketV1,
         ) -> NexResult<()> {
             Ok(())
@@ -545,7 +530,7 @@ mod test {
 
         async fn on_rmc_request(
             &self,
-            _client: Arc<RwLock<ClientConnection>>,
+            _client: &mut ClientConnection,
             _rmc_request: &RMCRequest,
         ) -> NexResult<()> {
             Ok(())

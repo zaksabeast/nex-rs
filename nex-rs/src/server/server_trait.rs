@@ -243,6 +243,7 @@ pub trait Server: EventHandler {
         let mut client = self.find_client(&clients, peer).await;
 
         if client.is_none() {
+            drop(clients);
             {
                 let mut clients = client_list_rwlock.write().await;
                 self.create_client(&mut clients, peer);
@@ -250,7 +251,6 @@ pub trait Server: EventHandler {
             clients = client_list_rwlock.read().await;
             client = self.find_client(&clients, peer).await;
         }
-
         let mut client = client.unwrap().write().await;
 
         let packet = client.read_packet(message)?;
@@ -270,6 +270,7 @@ pub trait Server: EventHandler {
         self.emit_packet_events(&mut client, &packet).await?;
         self.increment_sequence_id_in(&mut client, &packet);
         drop(client);
+        drop(clients);
         self.handle_disconnect(peer, &packet).await;
 
         Ok(())

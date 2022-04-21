@@ -70,26 +70,25 @@ pub trait Server: EventHandler {
             loop {
                 invertal.tick().await;
 
-                for client in clients_lock.write().await.iter() {
-                    let mut client = client.write().await;
-                    if let Some(timer) = client.get_kick_timer() {
-                        client.set_kick_timer(Some(timer.saturating_sub(3)));
-                    }
-                }
+                let mut living_clients = Vec::with_capacity(clients_lock.read().await.len());
 
-                let mut to_remove = vec![];
-                for (i, client) in clients_lock.read().await.iter().enumerate() {
-                    if let Some(time) = client.read().await.get_kick_timer() {
-                        if time == 0 {
-                            to_remove.push(i);
+                let mut clients_guard = clients_lock.write().await;
+
+                let old_clients = std::mem::take(&mut *clients_guard);
+
+                for client_lock in old_clients.into_iter() {
+                    let mut client = client_lock.write().await;
+                    if let Some(timer) = client.get_kick_timer() {
+                        if timer == 0 {
+                            drop(client);
+                            living_clients.push(client_lock)
+                        } else {
+                            client.set_kick_timer(Some(timer.saturating_sub(3)));
                         }
                     }
                 }
 
-                let mut clients = clients_lock.write().await;
-                for index in to_remove {
-                    clients.remove(index);
-                }
+                let _ = std::mem::replace(&mut *clients_guard, living_clients);
             }
         });
 

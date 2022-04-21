@@ -98,15 +98,19 @@ pub trait Server: EventHandler {
         Ok(())
     }
 
-    async fn listen<T: Server + Sized + Send + Sync + 'static>(server: T) -> ServerResult<()> {
-        let server = Arc::new(RwLock::new(server));
+    async fn listen<T: Server + Sized + Send + Sync + 'static>(
+        mut server: T,
+        addr: &str,
+    ) -> ServerResult<()> {
+        server.initialize(addr).await?;
+        let server = Arc::new(server);
 
         loop {
-            let (buf, peer) = server.read().await.receive_data().await?;
+            let (buf, peer) = server.receive_data().await?;
             let clone = Arc::clone(&server);
             tokio::spawn(async move {
-                if let Err(error) = clone.read().await.handle_socket_message(buf, peer).await {
-                    clone.read().await.on_error(error).await;
+                if let Err(error) = clone.handle_socket_message(buf, peer).await {
+                    clone.on_error(error).await;
                 }
             });
         }

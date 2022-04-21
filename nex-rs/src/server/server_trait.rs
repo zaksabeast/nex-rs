@@ -236,7 +236,7 @@ pub trait Server: EventHandler {
     async fn handle_socket_message(&self, message: Vec<u8>, peer: SocketAddr) -> NexResult<()> {
         let base = self.get_base();
 
-        let client_list_rwlock = Arc::clone(&self.get_base().clients);
+        let client_list_rwlock = self.get_clients();
 
         let mut clients = client_list_rwlock.read().await;
 

@@ -70,13 +70,9 @@ pub trait Server: EventHandler {
             loop {
                 invertal.tick().await;
 
-                for client in clients_lock
-                    .write()
-                    .await
-                    .iter_mut()
-                    .map(|c| async { c.write().await })
+                for client in clients_lock.write().await.iter()
                 {
-                    let mut client = client.await;
+                    let mut client = client.write().await;
                     if let Some(timer) = client.get_kick_timer() {
                         client.set_kick_timer(Some(timer.saturating_sub(3)));
                     }
@@ -162,7 +158,7 @@ pub trait Server: EventHandler {
         Ok(())
     }
 
-    async fn should_ignore_packet(&self, client: &mut ClientConnection, packet: &PacketV1) -> bool {
+    fn should_ignore_packet(&self, client: &mut ClientConnection, packet: &PacketV1) -> bool {
         let packet_type = packet.get_packet_type();
 
         // Ignore packets from disconnected clients
@@ -245,7 +241,7 @@ pub trait Server: EventHandler {
         let mut client = client_rwlock.write().await;
         let packet = client.read_packet(message)?;
 
-        if self.should_ignore_packet(&mut client, &packet).await {
+        if self.should_ignore_packet(&mut client, &packet) {
             return Ok(());
         }
 
@@ -437,7 +433,7 @@ pub trait Server: EventHandler {
         self.send_raw(client, &encoded_packet).await
     }
 
-    async fn send_raw(&self, client: &mut ClientConnection, data: &[u8]) -> ServerResult<usize> {
+    async fn send_raw(&self, client: &ClientConnection, data: &[u8]) -> ServerResult<usize> {
         let socket = self.get_socket()?;
         socket
             .send_to(data, client.get_address())

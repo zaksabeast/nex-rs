@@ -219,18 +219,18 @@ pub trait Server: EventHandler {
         None
     }
 
-    fn create_client<'a>(
+    fn create_client(
         &self,
-        clients: &'a mut Vec<RwLock<ClientConnection>>,
+        clients: &mut Vec<RwLock<ClientConnection>>,
         addr: SocketAddr,
-    ) -> &'a RwLock<ClientConnection> {
+    ) -> usize {
         let settings = &self.get_base().settings;
         let new_client = RwLock::new(ClientConnection::new(
             addr,
             settings.create_client_context(),
         ));
         clients.push(new_client);
-        clients.last().unwrap()
+        clients.len() - 1
     }
 
     async fn handle_socket_message(&self, message: Vec<u8>, peer: SocketAddr) -> NexResult<()> {
@@ -244,12 +244,12 @@ pub trait Server: EventHandler {
 
         if client.is_none() {
             drop(clients);
-            {
+            let index = {
                 let mut clients = client_list_rwlock.write().await;
-                self.create_client(&mut clients, peer);
-            }
+                self.create_client(&mut clients, peer)
+            };
             clients = client_list_rwlock.read().await;
-            client = self.find_client(&clients, peer).await;
+            client = Some(&clients[index]);
         }
         let mut client = client.unwrap().write().await;
 

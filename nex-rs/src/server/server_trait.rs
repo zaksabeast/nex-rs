@@ -72,26 +72,24 @@ pub trait Server: EventHandler {
 
                 let mut clients_guard = clients_lock.write().await;
 
-                let mut living_clients = Vec::with_capacity(clients_guard.len());
+                let len = clients_guard.len();
 
-                let old_clients = std::mem::take(&mut *clients_guard);
+                let old_clients = std::mem::replace(&mut *clients_guard, Vec::with_capacity(len));
 
                 for client_lock in old_clients.into_iter() {
                     let mut client = client_lock.write().await;
                     if let Some(timer) = client.get_kick_timer() {
                         if timer == 0 {
                             drop(client);
-                            living_clients.push(client_lock);
+                            clients_guard.push(client_lock);
                         } else {
                             client.set_kick_timer(Some(timer.saturating_sub(3)));
                         }
                     } else {
                         drop(client);
-                        living_clients.push(client_lock);
+                        clients_guard.push(client_lock);
                     }
                 }
-
-                let _ = std::mem::replace(&mut *clients_guard, living_clients);
             }
         });
 

@@ -70,9 +70,9 @@ pub trait Server: EventHandler {
             loop {
                 invertal.tick().await;
 
-                let mut living_clients = Vec::with_capacity(clients_lock.read().await.len());
-
                 let mut clients_guard = clients_lock.write().await;
+
+                let mut living_clients = Vec::with_capacity(clients_guard.len());
 
                 let old_clients = std::mem::take(&mut *clients_guard);
 
@@ -81,10 +81,13 @@ pub trait Server: EventHandler {
                     if let Some(timer) = client.get_kick_timer() {
                         if timer == 0 {
                             drop(client);
-                            living_clients.push(client_lock)
+                            living_clients.push(client_lock);
                         } else {
                             client.set_kick_timer(Some(timer.saturating_sub(3)));
                         }
+                    } else {
+                        drop(client);
+                        living_clients.push(client_lock);
                     }
                 }
 

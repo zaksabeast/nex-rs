@@ -8,18 +8,14 @@ use async_trait::async_trait;
 use no_std_io::{StreamContainer, StreamWriter};
 use rand::RngCore;
 use std::{net::SocketAddr, sync::Arc, time::Duration};
-use tokio::{
-    net::UdpSocket,
-    sync::{Mutex, RwLock},
-    time,
-};
+use tokio::{net::UdpSocket, sync::RwLock, time};
 
 #[async_trait]
 pub trait Server: EventHandler {
     fn get_base(&self) -> &BaseServer;
     fn get_mut_base(&mut self) -> &mut BaseServer;
 
-    fn get_clients(&self) -> Arc<Mutex<Vec<ClientConnection>>> {
+    fn get_clients(&self) -> Arc<RwLock<Vec<RwLock<ClientConnection>>>> {
         Arc::clone(&self.get_base().clients)
     }
 
@@ -66,31 +62,34 @@ pub trait Server: EventHandler {
 
         self.get_mut_base().socket = Some(socket);
 
-        let clients = Arc::clone(&self.get_base().clients);
+        let clients_lock = Arc::clone(&self.get_base().clients);
         let ping_kick_thread = tokio::spawn(async move {
             let mut invertal = time::interval(Duration::from_secs(3));
             invertal.tick().await;
 
             loop {
                 invertal.tick().await;
-                let mut clients = clients.lock().await;
 
-                for client in clients.iter_mut() {
+                let mut clients_guard = clients_lock.write().await;
+
+                let len = clients_guard.len();
+
+                let old_clients = std::mem::replace(&mut *clients_guard, Vec::with_capacity(len));
+
+                for client_lock in old_clients.into_iter() {
+                    let mut client = client_lock.write().await;
                     if let Some(timer) = client.get_kick_timer() {
-                        client.set_kick_timer(Some(timer.saturating_sub(3)));
+                        if timer == 0 {
+                            drop(client);
+                            clients_guard.push(client_lock);
+                        } else {
+                            client.set_kick_timer(Some(timer.saturating_sub(3)));
+                        }
+                    } else {
+                        drop(client);
+                        clients_guard.push(client_lock);
                     }
                 }
-
-                *clients = clients
-                    .iter()
-                    .filter_map(|c| {
-                        if c.get_kick_timer() == Some(0) {
-                            None
-                        } else {
-                            Some(c.clone())
-                        }
-                    })
-                    .collect::<Vec<ClientConnection>>();
             }
         });
 
@@ -99,15 +98,19 @@ pub trait Server: EventHandler {
         Ok(())
     }
 
-    async fn listen<T: Server + Sized + Send + Sync + 'static>(server: T) -> ServerResult<()> {
-        let server = Arc::new(RwLock::new(server));
+    async fn listen<T: Server + Sized + Send + Sync + 'static>(
+        mut server: T,
+        addr: &str,
+    ) -> ServerResult<()> {
+        server.initialize(addr).await?;
+        let server = Arc::new(server);
 
         loop {
-            let (buf, peer) = server.read().await.receive_data().await?;
+            let (buf, peer) = server.receive_data().await?;
             let clone = Arc::clone(&server);
             tokio::spawn(async move {
-                if let Err(error) = clone.read().await.handle_socket_message(buf, peer).await {
-                    clone.read().await.on_error(error).await;
+                if let Err(error) = clone.handle_socket_message(buf, peer).await {
+                    clone.on_error(error).await;
                 }
             });
         }
@@ -207,37 +210,56 @@ pub trait Server: EventHandler {
         }
     }
 
-    fn find_or_create_client<'a>(
+    async fn find_client<'a>(
         &self,
-        clients: &'a mut Vec<ClientConnection>,
+        clients: &'a [RwLock<ClientConnection>],
         addr: SocketAddr,
-    ) -> &'a mut ClientConnection {
-        let client_index = clients
-            .iter()
-            .position(|client| client.get_address() == addr);
-
-        match client_index {
-            Some(index) => &mut clients[index],
-            None => {
-                let settings = &self.get_base().settings;
-                let new_client = ClientConnection::new(addr, settings.create_client_context());
-                clients.push(new_client);
-                // We just pushed a client, so we know one exists
-                clients.last_mut().unwrap()
+    ) -> Option<&'a RwLock<ClientConnection>> {
+        for client in clients.iter() {
+            if client.read().await.get_address() == addr {
+                return Some(client);
             }
         }
+        None
+    }
+
+    fn create_client(
+        &self,
+        clients: &mut Vec<RwLock<ClientConnection>>,
+        addr: SocketAddr,
+    ) -> usize {
+        let settings = &self.get_base().settings;
+        let new_client = RwLock::new(ClientConnection::new(
+            addr,
+            settings.create_client_context(),
+        ));
+        clients.push(new_client);
+        clients.len() - 1
     }
 
     async fn handle_socket_message(&self, message: Vec<u8>, peer: SocketAddr) -> NexResult<()> {
         let base = self.get_base();
 
-        let client_mutex = &base.clients;
-        let mut clients = client_mutex.lock().await;
-        let client = self.find_or_create_client(&mut clients, peer);
+        let client_list_rwlock = self.get_clients();
+
+        let mut clients = client_list_rwlock.read().await;
+
+        let mut client = self.find_client(&clients, peer).await;
+
+        if client.is_none() {
+            drop(clients);
+            let index = {
+                let mut clients = client_list_rwlock.write().await;
+                self.create_client(&mut clients, peer)
+            };
+            clients = client_list_rwlock.read().await;
+            client = Some(&clients[index]);
+        }
+        let mut client = client.unwrap().write().await;
 
         let packet = client.read_packet(message)?;
 
-        if self.should_ignore_packet(client, &packet) {
+        if self.should_ignore_packet(&mut client, &packet) {
             return Ok(());
         }
 
@@ -247,10 +269,11 @@ pub trait Server: EventHandler {
             return Ok(());
         }
 
-        self.handle_connection_init(client, &packet);
-        self.acknowledge_packet(client, &packet).await?;
-        self.emit_packet_events(client, &packet).await?;
-        self.increment_sequence_id_in(client, &packet);
+        self.handle_connection_init(&mut client, &packet);
+        self.acknowledge_packet(&mut client, &packet).await?;
+        self.emit_packet_events(&mut client, &packet).await?;
+        self.increment_sequence_id_in(&mut client, &packet);
+        drop(client);
         drop(clients);
         self.handle_disconnect(peer, &packet).await;
 
@@ -258,11 +281,15 @@ pub trait Server: EventHandler {
     }
 
     async fn kick(&self, addr: SocketAddr) {
-        let client_mutex = self.get_clients();
-        let mut clients = client_mutex.lock().await;
-        let client_index = clients
-            .iter_mut()
-            .position(|potential_client| potential_client.get_address() == addr);
+        let client_rwlock = self.get_clients();
+        let mut clients = client_rwlock.write().await;
+        let mut client_index = None;
+        for (i, client) in clients.iter().enumerate() {
+            if client.read().await.get_address() == addr {
+                client_index = Some(i);
+                break;
+            }
+        }
 
         if let Some(index) = client_index {
             clients.remove(index);
@@ -507,9 +534,9 @@ mod test {
 
     async fn get_server_with_client(client: ClientConnection) -> TestServer {
         let server = TestServer::default();
-        let client_mutex = server.get_clients();
-        let mut clients = client_mutex.lock().await;
-        clients.push(client);
+        let client_rwlock = server.get_clients();
+        let mut clients = client_rwlock.write().await;
+        clients.push(RwLock::new(client));
 
         server
     }
@@ -539,8 +566,8 @@ mod test {
             .await
             .unwrap();
 
-        let client_mutex = server.get_clients();
-        let clients = client_mutex.lock().await;
+        let client_rwlock = server.get_clients();
+        let clients = client_rwlock.read().await;
         assert_eq!(clients.len(), 0);
     }
 }

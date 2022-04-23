@@ -100,11 +100,11 @@ impl ClientConnection {
             .set_server_connection_signature(server_connection_signature);
     }
 
-    pub fn get_server_connection_signature(&mut self) -> &[u8] {
+    pub fn get_server_connection_signature(&self) -> &[u8] {
         self.context.signature_context.server_connection_signature()
     }
 
-    pub fn is_connected(&mut self) -> bool {
+    pub fn is_connected(&self) -> bool {
         self.is_connected
     }
 
@@ -145,7 +145,7 @@ impl ClientConnection {
         &mut self.context
     }
 
-    pub fn get_sequence_id_in(&mut self) -> u16 {
+    pub fn get_sequence_id_in(&self) -> u16 {
         self.context.get_sequence_id_in()
     }
 

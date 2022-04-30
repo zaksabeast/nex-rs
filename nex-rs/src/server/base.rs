@@ -1,8 +1,10 @@
-use std::collections::{BTreeMap, VecDeque};
-use std::net::SocketAddr;
 use super::ServerSettings;
 use crate::{client::ClientConnection, counter::Counter};
-use std::sync::Arc;
+use std::{
+    collections::{BTreeMap, VecDeque},
+    net::SocketAddr,
+    sync::Arc,
+};
 use tokio::{net::UdpSocket, sync::RwLock, task::JoinHandle};
 
 #[derive(Default)]
@@ -23,7 +25,7 @@ impl BaseServer {
             connection_id_counter: Counter::new(10),
             ping_kick_thread: None,
             clients: Arc::new(RwLock::new(vec![])),
-            packet_queues: Arc::new(RwLock::new(BTreeMap::new()))
+            packet_queues: Arc::new(RwLock::new(BTreeMap::new())),
         }
     }
 }

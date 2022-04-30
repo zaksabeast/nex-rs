@@ -1,16 +1,14 @@
 use super::{BaseServer, Error, EventHandler, ServerResult};
 use crate::{
-    client::ClientConnection,
+    client::{ClientConnection, Error::Generic},
     packet::{Packet, PacketFlag, PacketType, PacketV1},
     result::NexResult,
 };
 use async_trait::async_trait;
 use no_std_io::{StreamContainer, StreamWriter};
 use rand::RngCore;
-use std::{net::SocketAddr, sync::Arc, time::Duration};
-use std::collections::VecDeque;
+use std::{collections::VecDeque, net::SocketAddr, sync::Arc, time::Duration};
 use tokio::{net::UdpSocket, sync::RwLock, time};
-use crate::client::Error::Generic;
 
 #[async_trait]
 pub trait Server: EventHandler {
@@ -65,6 +63,7 @@ pub trait Server: EventHandler {
         self.get_mut_base().socket = Some(socket);
 
         let clients_lock = Arc::clone(&self.get_base().clients);
+        let packet_queues_lock = Arc::clone(&self.get_base().packet_queues);
         let ping_kick_thread = tokio::spawn(async move {
             let mut invertal = time::interval(Duration::from_secs(3));
             invertal.tick().await;
@@ -85,6 +84,11 @@ pub trait Server: EventHandler {
                             client.set_kick_timer(Some(timer.saturating_sub(3)));
                             drop(client);
                             clients_guard.push(client_lock);
+                        } else {
+                            packet_queues_lock
+                                .write()
+                                .await
+                                .remove(&client.get_address());
                         }
                     } else {
                         drop(client);
@@ -108,7 +112,14 @@ pub trait Server: EventHandler {
 
         loop {
             let (buf, peer) = server.receive_data().await?;
-            server.get_base().packet_queues.write().await.entry(peer).or_insert(VecDeque::new()).push_back(buf);
+            server
+                .get_base()
+                .packet_queues
+                .write()
+                .await
+                .entry(peer)
+                .or_insert_with(VecDeque::new)
+                .push_back(buf);
             let clone = Arc::clone(&server);
             tokio::spawn(async move {
                 if let Err(error) = clone.handle_socket_message(peer).await {
@@ -259,15 +270,22 @@ pub trait Server: EventHandler {
         }
         let mut client = client.unwrap().write().await;
 
-        let message = if let Some(entry) = self.get_base().packet_queues.write().await.get_mut(&peer) {
-            if let Some(message) = entry.pop_front() {
-                message
+        let message =
+            if let Some(entry) = self.get_base().packet_queues.write().await.get_mut(&peer) {
+                if let Some(message) = entry.pop_front() {
+                    message
+                } else {
+                    return Err(Generic {
+                        message: "Failed to find packet".to_string(),
+                    }
+                    .into());
+                }
             } else {
-                return Err(Generic {message: "Failed to find packet".to_string()}.into());
-            }
-        } else {
-            return Err(Generic {message: "Failed to find packet".to_string()}.into());
-        };
+                return Err(Generic {
+                    message: "Failed to find packet".to_string(),
+                }
+                .into());
+            };
 
         let packet = client.read_packet(message)?;
 
@@ -297,8 +315,14 @@ pub trait Server: EventHandler {
         let mut clients = client_rwlock.write().await;
         let mut client_index = None;
         for (i, client) in clients.iter().enumerate() {
-            if client.read().await.get_address() == addr {
+            let client = client.read().await;
+            if client.get_address() == addr {
                 client_index = Some(i);
+                self.get_base()
+                    .packet_queues
+                    .write()
+                    .await
+                    .remove(&client.get_address());
                 break;
             }
         }
@@ -575,13 +599,15 @@ mod test {
         let mut queue = VecDeque::new();
         queue.push_back(packet_bytes);
 
-        server.get_base().packet_queues.write().await.insert(addr, queue);
+        server
+            .get_base()
+            .packet_queues
+            .write()
+            .await
+            .insert(addr, queue);
 
         // Handle disconnect
-        server
-            .handle_socket_message(addr)
-            .await
-            .unwrap();
+        server.handle_socket_message(addr).await.unwrap();
 
         let client_rwlock = server.get_clients();
         let clients = client_rwlock.read().await;

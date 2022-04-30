@@ -80,11 +80,10 @@ pub trait Server: EventHandler {
                 for client_lock in old_clients.into_iter() {
                     let mut client = client_lock.write().await;
                     if let Some(timer) = client.get_kick_timer() {
-                        if timer == 0 {
+                        if timer != 0 {
+                            client.set_kick_timer(Some(timer.saturating_sub(3)));
                             drop(client);
                             clients_guard.push(client_lock);
-                        } else {
-                            client.set_kick_timer(Some(timer.saturating_sub(3)));
                         }
                     } else {
                         drop(client);

@@ -8,6 +8,7 @@ use async_trait::async_trait;
 use no_std_io::{StreamContainer, StreamWriter};
 use rand::RngCore;
 use std::{net::SocketAddr, sync::Arc, time::Duration};
+use std::collections::VecDeque;
 use tokio::{net::UdpSocket, sync::RwLock, time};
 use crate::client::Error::Generic;
 
@@ -107,7 +108,7 @@ pub trait Server: EventHandler {
 
         loop {
             let (buf, peer) = server.receive_data().await?;
-            server.get_base().packet_queues.write().await.entry(peer).or_insert(vec![]).push(buf);
+            server.get_base().packet_queues.write().await.entry(peer).or_insert(VecDeque::new()).push_back(buf);
             let clone = Arc::clone(&server);
             tokio::spawn(async move {
                 if let Err(error) = clone.handle_socket_message(peer).await {
@@ -259,7 +260,7 @@ pub trait Server: EventHandler {
         let mut client = client.unwrap().write().await;
 
         let message = if let Some(entry) = self.get_base().packet_queues.write().await.get_mut(&peer) {
-            if let Some(message) = entry.pop() {
+            if let Some(message) = entry.pop_front() {
                 message
             } else {
                 return Err(Generic {message: "Failed to find packet".to_string()}.into());
@@ -571,7 +572,10 @@ mod test {
         disconnect_packet.set_flags(flags);
         let packet_bytes = disconnect_packet.to_bytes(4, &SignatureContext::default());
 
-        server.get_base().packet_queues.write().await.insert(addr, vec![packet_bytes]);
+        let mut queue = VecDeque::new();
+        queue.push_back(packet_bytes);
+
+        server.get_base().packet_queues.write().await.insert(addr, queue);
 
         // Handle disconnect
         server

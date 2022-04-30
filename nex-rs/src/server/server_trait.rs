@@ -9,6 +9,7 @@ use no_std_io::{StreamContainer, StreamWriter};
 use rand::RngCore;
 use std::{net::SocketAddr, sync::Arc, time::Duration};
 use tokio::{net::UdpSocket, sync::RwLock, time};
+use crate::client::Error::Generic;
 
 #[async_trait]
 pub trait Server: EventHandler {
@@ -107,9 +108,10 @@ pub trait Server: EventHandler {
 
         loop {
             let (buf, peer) = server.receive_data().await?;
+            server.get_base().packet_queues.write().await.entry(peer).or_insert(vec![]).push(buf);
             let clone = Arc::clone(&server);
             tokio::spawn(async move {
-                if let Err(error) = clone.handle_socket_message(buf, peer).await {
+                if let Err(error) = clone.handle_socket_message(peer).await {
                     clone.on_error(error).await;
                 }
             });
@@ -237,7 +239,7 @@ pub trait Server: EventHandler {
         clients.len() - 1
     }
 
-    async fn handle_socket_message(&self, message: Vec<u8>, peer: SocketAddr) -> NexResult<()> {
+    async fn handle_socket_message(&self, peer: SocketAddr) -> NexResult<()> {
         let base = self.get_base();
 
         let client_list_rwlock = self.get_clients();
@@ -256,6 +258,16 @@ pub trait Server: EventHandler {
             client = Some(&clients[index]);
         }
         let mut client = client.unwrap().write().await;
+
+        let message = if let Some(entry) = self.get_base().packet_queues.write().await.get_mut(&peer) {
+            if let Some(message) = entry.pop() {
+                message
+            } else {
+                return Err(Generic {message: "Failed to find packet".to_string()}.into());
+            }
+        } else {
+            return Err(Generic {message: "Failed to find packet".to_string()}.into());
+        };
 
         let packet = client.read_packet(message)?;
 
@@ -560,9 +572,11 @@ mod test {
         disconnect_packet.set_flags(flags);
         let packet_bytes = disconnect_packet.to_bytes(4, &SignatureContext::default());
 
+        server.get_base().packet_queues.write().await.insert(addr, vec![packet_bytes]);
+
         // Handle disconnect
         server
-            .handle_socket_message(packet_bytes, addr)
+            .handle_socket_message(addr)
             .await
             .unwrap();
 

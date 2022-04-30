@@ -1,3 +1,5 @@
+use std::collections::{BTreeMap};
+use std::net::SocketAddr;
 use super::ServerSettings;
 use crate::{client::ClientConnection, counter::Counter};
 use std::sync::Arc;
@@ -10,6 +12,7 @@ pub struct BaseServer {
     pub(super) socket: Option<UdpSocket>,
     pub(super) ping_kick_thread: Option<JoinHandle<()>>,
     pub(super) clients: Arc<RwLock<Vec<RwLock<ClientConnection>>>>,
+    pub(super) packet_queues: Arc<RwLock<BTreeMap<SocketAddr, Vec<Vec<u8>>>>>,
 }
 
 impl BaseServer {
@@ -20,6 +23,7 @@ impl BaseServer {
             connection_id_counter: Counter::new(10),
             ping_kick_thread: None,
             clients: Arc::new(RwLock::new(vec![])),
+            packet_queues: Arc::new(RwLock::new(BTreeMap::new()))
         }
     }
 }

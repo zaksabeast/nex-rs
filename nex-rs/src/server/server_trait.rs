@@ -156,6 +156,7 @@ pub trait Server: EventHandler {
             PacketType::Ping => {
                 self.on_ping(client, packet).await?;
             }
+            PacketType::Invalid => {}
         };
 
         Ok(())

@@ -50,7 +50,7 @@ impl RawPacketV1Header {
             substream_id: self.substream_id,
             sequence_id: self.sequence_id,
             flags: PacketFlags::new(flags),
-            packet_type: packet_type.try_into()?,
+            packet_type: packet_type.into(),
         };
 
         Ok(header)

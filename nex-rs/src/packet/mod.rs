@@ -18,7 +18,7 @@ pub trait Packet {
     const CLIENT_ID: u8 = 0xaf;
     const SERVER_ID: u8 = 0xa1;
 
-    fn to_bytes(&self, flags_version: u32, context: &SignatureContext) -> Vec<u8>;
+    fn to_bytes(&self, context: &SignatureContext) -> Vec<u8>;
 
     fn get_source(&self) -> u8;
     fn set_source(&mut self, value: u8);

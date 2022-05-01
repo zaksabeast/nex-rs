@@ -21,7 +21,7 @@ pub struct PacketV1 {
 impl Packet for PacketV1 {
     const VERSION: u8 = 1;
 
-    fn to_bytes(self: &PacketV1, flags_version: u32, context: &SignatureContext) -> Vec<u8> {
+    fn to_bytes(self: &PacketV1, context: &SignatureContext) -> Vec<u8> {
         let raw_options = self.options.as_bytes(&self.header.packet_type);
 
         let options_len: u8 = raw_options
@@ -34,7 +34,7 @@ impl Packet for PacketV1 {
             .try_into()
             .expect("Payload length is too large");
 
-        let mut raw_header = self.header.into_raw(flags_version);
+        let mut raw_header = self.header.into_raw(self.flags_version);
         raw_header.options_length = options_len;
         raw_header.payload_size = payload_size;
 
@@ -137,7 +137,7 @@ impl Packet for PacketV1 {
 }
 
 impl PacketV1 {
-    pub fn new_ping_packet() -> Self {
+    pub fn new_ping_packet(flags_version: u32) -> Self {
         Self {
             header: PacketV1Header {
                 source: Self::SERVER_ID,
@@ -146,6 +146,7 @@ impl PacketV1 {
                 flags: PacketFlag::Ack | PacketFlag::Reliable,
                 ..Default::default()
             },
+            flags_version,
             ..Default::default()
         }
     }
@@ -154,6 +155,7 @@ impl PacketV1 {
         session_id: u8,
         connection_signature: Vec<u8>,
         payload: Vec<u8>,
+        flags_version: u32,
     ) -> Self {
         Self {
             header: PacketV1Header {
@@ -169,11 +171,12 @@ impl PacketV1 {
                 connection_signature,
                 ..Default::default()
             },
+            flags_version,
             ..Default::default()
         }
     }
 
-    pub fn new_disconnect_packet() -> Self {
+    pub fn new_disconnect_packet(flags_version: u32) -> Self {
         Self {
             header: PacketV1Header {
                 source: Self::SERVER_ID,
@@ -182,6 +185,7 @@ impl PacketV1 {
                 packet_type: PacketType::Disconnect,
                 ..Default::default()
             },
+            flags_version,
             ..Default::default()
         }
     }
@@ -212,10 +216,13 @@ impl PacketV1 {
     ) -> PacketResult<Self> {
         let data_len = data.len();
 
-        let mut packet = Self::default();
+        let mut packet = PacketV1 {
+            flags_version,
+            ..Self::default()
+        };
 
         if data_len > 0 {
-            packet.decode(data, flags_version, context)?;
+            packet.decode(data, context)?;
         }
 
         Ok(packet)
@@ -249,12 +256,7 @@ impl PacketV1 {
         self.options.maximum_substream_id = value;
     }
 
-    fn decode(
-        &mut self,
-        data: Vec<u8>,
-        flags_version: u32,
-        context: &SignatureContext,
-    ) -> PacketResult<()> {
+    fn decode(&mut self, data: Vec<u8>, context: &SignatureContext) -> PacketResult<()> {
         let data_len = data.len();
 
         // magic + header + signature
@@ -270,7 +272,7 @@ impl PacketV1 {
 
         self.header = stream
             .default_read_stream_le::<RawPacketV1Header>()
-            .into_header(flags_version)?;
+            .into_header(self.flags_version)?;
 
         self.signature = stream.default_read_byte_stream(16).try_into().unwrap();
 
@@ -352,7 +354,7 @@ mod test {
         let context = SignatureContext::default();
         let packet = PacketV1::read_packet(bytes.clone(), flags_version, &context)
             .expect("Should have succeeded!");
-        let result = packet.to_bytes(flags_version, &context);
+        let result = packet.to_bytes(&context);
         assert_eq!(result, bytes);
     }
 
@@ -396,7 +398,7 @@ mod test {
             packet.options.supported_functions = 4;
             packet.options.maximum_substream_id = 1;
 
-            let result: Vec<u8> = packet.to_bytes(flags_version, &context);
+            let result: Vec<u8> = packet.to_bytes(&context);
             let expected_result = vec![
                 0xea, 0xd0, 0x01, 0x1b, 0x00, 0x00, 0x00, 0x00, 0xc0, 0x00, 0x00, 0x00, 0x00, 0x00,
                 0xd3, 0x7f, 0xf5, 0x70, 0x42, 0x0b, 0xba, 0xbf, 0xa3, 0xb6, 0xc3, 0x47, 0x5e, 0x14,
@@ -456,7 +458,7 @@ mod test {
             packet.options.initial_sequence_id = 0xabcd;
             packet.payload = vec![0xaa];
 
-            let result: Vec<u8> = packet.to_bytes(flags_version, &context);
+            let result: Vec<u8> = packet.to_bytes(&context);
             let expected_result = vec![
                 0xea, 0xd0, 0x01, 0x1f, 0x01, 0x00, 0x00, 0x00, 0xe1, 0x00, 0x01, 0x00, 0x00, 0x00,
                 0x15, 0xab, 0x64, 0x8a, 0xc2, 0xea, 0xcd, 0xa7, 0x25, 0x20, 0x19, 0x6f, 0x58, 0x0e,
@@ -520,7 +522,7 @@ mod test {
                 0x03, 0x03, 0x03,
             ];
 
-            let result: Vec<u8> = packet.to_bytes(flags_version, &context);
+            let result: Vec<u8> = packet.to_bytes(&context);
             let expected_result = vec![
                 0xea, 0xd0, 0x01, 0x03, 0x11, 0x00, 0x00, 0x00, 0xe2, 0x00, 0x01, 0x00, 0x00, 0x00,
                 0x7a, 0xde, 0xd4, 0xa9, 0xac, 0x49, 0x08, 0xcf, 0x5d, 0x93, 0xbb, 0x4f, 0x52, 0xec,
@@ -568,7 +570,7 @@ mod test {
             packet.header.flags.set_flag(PacketFlag::HasSize);
             packet.header.session_id = 1;
 
-            let result: Vec<u8> = packet.to_bytes(flags_version, &context);
+            let result: Vec<u8> = packet.to_bytes(&context);
             let expected_result = vec![
                 0xea, 0xd0, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0xe3, 0x00, 0x01, 0x00, 0x00, 0x00,
                 0x35, 0x74, 0x21, 0x30, 0x50, 0xde, 0x6d, 0xd9, 0x1d, 0xdc, 0xa3, 0x8b, 0xf5, 0x7a,
@@ -613,7 +615,7 @@ mod test {
             packet.header.flags.set_flag(PacketFlag::HasSize);
             packet.header.session_id = 1;
 
-            let result: Vec<u8> = packet.to_bytes(flags_version, &context);
+            let result: Vec<u8> = packet.to_bytes(&context);
             let expected_result = vec![
                 0xea, 0xd0, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0xc4, 0x00, 0x01, 0x00, 0x00, 0x00,
                 0x27, 0x0f, 0x9e, 0xb1, 0x07, 0xda, 0x84, 0x11, 0x88, 0x89, 0x2b, 0x81, 0x92, 0xad,

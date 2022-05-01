@@ -46,6 +46,9 @@ pub trait Server: EventHandler {
     fn get_flags_version(&self) -> u32 {
         self.get_base().settings.flags_version
     }
+    fn set_flags_version(&mut self, flags_version: u32) {
+        self.get_mut_base().settings.flags_version = flags_version;
+    }
 
     fn get_prudp_version(&self) -> u32 {
         self.get_base().settings.prudp_version
@@ -350,21 +353,18 @@ pub trait Server: EventHandler {
             PacketType::Syn => {
                 ack_packet
                     .set_connection_signature(client.get_server_connection_signature().to_vec());
-                ack_packet.set_supported_functions(packet.get_supported_functions());
+                ack_packet.set_supported_functions(packet.flags_version());
                 ack_packet.set_maximum_substream_id(0);
             }
             PacketType::Connect => {
                 ack_packet.set_connection_signature(vec![0; 16]);
-                ack_packet.set_supported_functions(packet.get_supported_functions());
+                ack_packet.set_supported_functions(packet.flags_version());
                 ack_packet.set_initial_sequence_id(10000);
                 ack_packet.set_maximum_substream_id(0);
             }
             PacketType::Data => {
                 // Aggregate acknowledgement
-                let mut flags = ack_packet.get_flags();
-                flags.clear_flag(PacketFlag::Ack);
-                flags.set_flag(PacketFlag::MultiAck);
-                ack_packet.set_flags(flags);
+                ack_packet.set_flags(PacketFlag::MultiAck | PacketFlag::HasSize);
 
                 let mut payload_stream = StreamContainer::new(vec![]);
 

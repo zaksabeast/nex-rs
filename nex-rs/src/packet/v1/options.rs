@@ -3,7 +3,7 @@ use no_std_io::{
     Cursor, EndianRead, EndianWrite, Error, ReadOutput, StreamContainer, StreamReader, StreamWriter,
 };
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct PacketV1Options {
     pub(super) supported_functions: u32,
     pub(super) fragment_id: u8,
@@ -181,23 +181,19 @@ impl EndianRead for PacketV1Options {
 
             match option_type {
                 PacketOption::SupportedFunctions => {
-                    let lsb = stream.read_byte_stream(option_size)?[0];
-                    // TODO: Set nex version
-                    // Is this something we want clients controlling?
-                    // Should we know this already?
-                    result.supported_functions = lsb.into();
+                    result.supported_functions = stream.read_stream_le()?;
                 }
                 PacketOption::ConnectionSignature => {
                     result.connection_signature = stream.read_byte_stream(option_size)?;
                 }
                 PacketOption::FragmentId => {
-                    result.fragment_id = stream.default_read_stream_le();
+                    result.fragment_id = stream.read_stream_le()?;
                 }
                 PacketOption::InitialSequenceId => {
-                    result.initial_sequence_id = stream.default_read_stream_le();
+                    result.initial_sequence_id = stream.read_stream_le()?;
                 }
                 PacketOption::MaxSubstreamId => {
-                    result.maximum_substream_id = stream.default_read_stream_le();
+                    result.maximum_substream_id = stream.read_stream_le()?;
                 }
             }
 

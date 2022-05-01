@@ -8,7 +8,6 @@ use no_std_io::{Reader, StreamContainer, StreamReader, StreamWriter};
 
 #[derive(Debug, Default)]
 pub struct PacketV1 {
-    flags_version: u32,
     header: PacketV1Header,
     signature: Vec<u8>,
     options: PacketV1Options,
@@ -37,8 +36,9 @@ impl Packet for PacketV1 {
         let mut stream = StreamContainer::new(vec![]);
         stream.checked_write_stream_le(&header);
 
+        let raw_header = header.raw();
         let signature = Self::calculate_signature(
-            &stream.get_slice()[2..14].try_into().unwrap(),
+            &raw_header[2..14].try_into().unwrap(),
             &self.payload,
             context.client_connection_signature(),
             &raw_options,
@@ -73,17 +73,17 @@ impl Packet for PacketV1 {
     }
 
     fn get_packet_type(&self) -> PacketType {
-        self.header.packet_type(self.flags_version)
+        self.header.packet_type(self.flags_version())
     }
     fn set_packet_type(&mut self, value: PacketType) {
-        self.header.set_packet_type(self.flags_version, value);
+        self.header.set_packet_type(self.flags_version(), value);
     }
 
     fn get_flags(&self) -> PacketFlags {
-        self.header.flags(self.flags_version)
+        self.header.flags(self.flags_version())
     }
     fn set_flags(&mut self, value: PacketFlags) {
-        self.header.set_flags(self.flags_version, value);
+        self.header.set_flags(self.flags_version(), value);
     }
 
     fn get_session_id(&self) -> u8 {
@@ -139,7 +139,10 @@ impl PacketV1 {
 
         Self {
             header,
-            flags_version,
+            options: PacketV1Options {
+                supported_functions: flags_version,
+                ..Default::default()
+            },
             ..Default::default()
         }
     }
@@ -165,9 +168,9 @@ impl PacketV1 {
             payload,
             options: PacketV1Options {
                 connection_signature,
+                supported_functions: flags_version,
                 ..Default::default()
             },
-            flags_version,
             ..Default::default()
         }
     }
@@ -184,7 +187,10 @@ impl PacketV1 {
 
         Self {
             header,
-            flags_version,
+            options: PacketV1Options {
+                supported_functions: flags_version,
+                ..Default::default()
+            },
             ..Default::default()
         }
     }
@@ -193,14 +199,16 @@ impl PacketV1 {
         let mut header = PacketV1Header::default();
         header.set_source(self.get_destination());
         header.set_destination(self.get_source());
-        header.set_packet_type(self.flags_version, self.get_packet_type());
-        header.set_flags(self.flags_version, PacketFlag::Ack | PacketFlag::HasSize);
+        header.set_packet_type(self.flags_version(), self.get_packet_type());
+        header.set_flags(self.flags_version(), PacketFlag::Ack | PacketFlag::HasSize);
         header.set_substream_id(0);
+        header.set_sequence_id(self.get_sequence_id());
 
         Self {
             header,
             options: PacketV1Options {
                 fragment_id: self.get_fragment_id(),
+                supported_functions: self.flags_version(),
                 ..Default::default()
             },
             ..Default::default()
@@ -208,10 +216,7 @@ impl PacketV1 {
     }
 
     pub fn read_packet(data: Vec<u8>, flags_version: u32) -> PacketResult<Self> {
-        let mut packet = PacketV1 {
-            flags_version,
-            ..Self::default()
-        };
+        let mut packet = PacketV1::default();
 
         let mut stream = StreamContainer::new(data.as_slice());
 
@@ -222,6 +227,11 @@ impl PacketV1 {
         let raw_options = stream.read_byte_stream(options_len)?;
         packet.options = raw_options.read_le(0)?;
 
+        let packet_type = packet.header.packet_type(flags_version);
+        if packet_type != PacketType::Syn && packet_type != PacketType::Connect {
+            packet.options.supported_functions = flags_version;
+        }
+
         let payload_size = usize::from(packet.header.payload_size());
         packet.payload = stream.read_byte_stream(payload_size)?;
 
@@ -230,7 +240,7 @@ impl PacketV1 {
 
     pub fn raw_options(&self) -> Vec<u8> {
         self.options
-            .as_bytes(&self.header.packet_type(self.flags_version))
+            .as_bytes(&self.header.packet_type(self.flags_version()))
     }
 
     pub fn get_substream_id(&self) -> u8 {
@@ -245,6 +255,9 @@ impl PacketV1 {
     }
     pub fn set_supported_functions(&mut self, value: u32) {
         self.options.supported_functions = value;
+    }
+    pub fn flags_version(&self) -> u32 {
+        self.options.supported_functions & 0xff
     }
 
     pub fn get_initial_sequence_id(&self) -> u16 {

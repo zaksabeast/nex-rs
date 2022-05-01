@@ -70,15 +70,21 @@ pub trait Server: EventHandler {
             loop {
                 invertal.tick().await;
 
-                let clients_guard = clients_lock.write().await;
+                let mut clients_guard = clients_lock.write().await;
 
-                for key in clients_guard.keys() {
-                    let client_lock = clients_guard.get(key).unwrap();
+                let old_clients = std::mem::take(&mut *clients_guard);
+
+                for (addr, client_lock) in old_clients {
                     let mut client = client_lock.write().await;
                     if let Some(timer) = client.get_kick_timer() {
                         if timer != 0 {
                             client.set_kick_timer(Some(timer.saturating_sub(3)));
+                            drop(client);
+                            clients_guard.insert(addr, client_lock);
                         }
+                    } else {
+                        drop(client);
+                        clients_guard.insert(addr, client_lock);
                     }
                 }
             }
@@ -208,18 +214,27 @@ pub trait Server: EventHandler {
 
         let client_list_rwlock = self.get_clients();
 
-        let mut clients = client_list_rwlock.write().await;
+        let mut clients = client_list_rwlock.read().await;
 
-        let mut client = clients
-            .entry(peer)
-            .or_insert_with(|| {
-                RwLock::new(ClientConnection::new(
+        let mut client_lock = clients.get(&peer);
+
+        if client_lock.is_none() {
+            drop(clients);
+            {
+                let mut clients = client_list_rwlock.write().await;
+                clients.insert(
                     peer,
-                    settings.create_client_context(),
-                ))
-            })
-            .write()
-            .await;
+                    RwLock::new(ClientConnection::new(
+                        peer,
+                        settings.create_client_context(),
+                    )),
+                );
+            }
+            clients = client_list_rwlock.read().await;
+            client_lock = clients.get(&peer);
+        }
+
+        let mut client = client_lock.unwrap().write().await;
 
         let packet = client.read_packet(message)?;
 

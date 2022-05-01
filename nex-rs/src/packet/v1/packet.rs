@@ -7,7 +7,7 @@ use crate::packet::{
 };
 use hmac::{Hmac, Mac};
 use md5::Md5;
-use no_std_io::{Cursor, Reader, StreamContainer, StreamReader, StreamWriter};
+use no_std_io::{Cursor, Reader, StreamContainer, StreamReader, StreamWriter, Writer};
 
 #[derive(Debug, Default)]
 pub struct PacketV1 {
@@ -30,9 +30,9 @@ impl Packet for PacketV1 {
     }
 
     fn to_bytes(self: &PacketV1, flags_version: u32, context: &SignatureContext) -> Vec<u8> {
-        let options = self.encode_options();
+        let raw_options = self.options.as_bytes(&self.header.packet_type);
 
-        let options_len: u8 = options
+        let options_len: u8 = raw_options
             .len()
             .try_into()
             .expect("Options length is too large");
@@ -53,14 +53,14 @@ impl Packet for PacketV1 {
             &stream.get_slice()[2..14].try_into().unwrap(),
             &self.payload,
             context.client_connection_signature(),
-            &options,
+            &raw_options,
             context,
         );
 
         stream.checked_write_stream_bytes(&signature);
 
         if options_len > 0 {
-            stream.checked_write_stream_bytes(&options);
+            stream.checked_write_stream_bytes(&raw_options);
         }
 
         if !self.payload.is_empty() {
@@ -245,38 +245,6 @@ impl PacketV1 {
         }
 
         Ok(())
-    }
-
-    pub fn encode_options(&self) -> Vec<u8> {
-        let mut stream = StreamContainer::new(vec![]);
-
-        if self.header.packet_type == PacketType::Syn
-            || self.header.packet_type == PacketType::Connect
-        {
-            stream.checked_write_stream_le::<u8>(&u8::from(PacketOption::SupportedFunctions));
-            stream.checked_write_stream_le(&4u8);
-            stream.checked_write_stream_le(&self.options.supported_functions);
-
-            stream.checked_write_stream_le::<u8>(&u8::from(PacketOption::ConnectionSignature));
-            stream.checked_write_stream_le(&16u8);
-            stream.checked_write_stream_bytes(&self.options.connection_signature);
-
-            if self.header.packet_type == PacketType::Connect {
-                stream.checked_write_stream_le::<u8>(&u8::from(PacketOption::InitialSequenceId));
-                stream.checked_write_stream_le(&2u8);
-                stream.checked_write_stream_le(&self.options.initial_sequence_id);
-            }
-
-            stream.checked_write_stream_le::<u8>(&u8::from(PacketOption::MaxSubstreamId));
-            stream.checked_write_stream_le(&1u8);
-            stream.checked_write_stream_le(&self.options.maximum_substream_id);
-        } else if self.header.packet_type == PacketType::Data {
-            stream.checked_write_stream_le::<u8>(&u8::from(PacketOption::FragmentId));
-            stream.checked_write_stream_le(&1u8);
-            stream.checked_write_stream_le(&self.options.fragment_id);
-        }
-
-        stream.into_raw()
     }
 
     pub fn calculate_signature(

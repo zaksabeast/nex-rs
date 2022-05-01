@@ -1,4 +1,4 @@
-use super::{BaseServer, Error, EventHandler, ServerResult};
+use super::{BaseServer, ClientMap, Error, EventHandler, ServerResult};
 use crate::{
     client::ClientConnection,
     packet::{Packet, PacketFlag, PacketType, PacketV1},
@@ -15,7 +15,7 @@ pub trait Server: EventHandler {
     fn get_base(&self) -> &BaseServer;
     fn get_mut_base(&mut self) -> &mut BaseServer;
 
-    fn get_clients(&self) -> Arc<RwLock<Vec<RwLock<ClientConnection>>>> {
+    fn get_clients(&self) -> Arc<RwLock<ClientMap>> {
         Arc::clone(&self.get_base().clients)
     }
 
@@ -70,24 +70,15 @@ pub trait Server: EventHandler {
             loop {
                 invertal.tick().await;
 
-                let mut clients_guard = clients_lock.write().await;
+                let clients_guard = clients_lock.write().await;
 
-                let len = clients_guard.len();
-
-                let old_clients = std::mem::replace(&mut *clients_guard, Vec::with_capacity(len));
-
-                for client_lock in old_clients.into_iter() {
+                for key in clients_guard.keys() {
+                    let client_lock = clients_guard.get(key).unwrap();
                     let mut client = client_lock.write().await;
                     if let Some(timer) = client.get_kick_timer() {
-                        if timer == 0 {
-                            drop(client);
-                            clients_guard.push(client_lock);
-                        } else {
+                        if timer != 0 {
                             client.set_kick_timer(Some(timer.saturating_sub(3)));
                         }
-                    } else {
-                        drop(client);
-                        clients_guard.push(client_lock);
                     }
                 }
             }
@@ -210,52 +201,24 @@ pub trait Server: EventHandler {
         }
     }
 
-    async fn find_client<'a>(
-        &self,
-        clients: &'a [RwLock<ClientConnection>],
-        addr: SocketAddr,
-    ) -> Option<&'a RwLock<ClientConnection>> {
-        for client in clients.iter() {
-            if client.read().await.get_address() == addr {
-                return Some(client);
-            }
-        }
-        None
-    }
-
-    fn create_client(
-        &self,
-        clients: &mut Vec<RwLock<ClientConnection>>,
-        addr: SocketAddr,
-    ) -> usize {
-        let settings = &self.get_base().settings;
-        let new_client = RwLock::new(ClientConnection::new(
-            addr,
-            settings.create_client_context(),
-        ));
-        clients.push(new_client);
-        clients.len() - 1
-    }
-
     async fn handle_socket_message(&self, message: Vec<u8>, peer: SocketAddr) -> NexResult<()> {
         let base = self.get_base();
+        let settings = &self.get_base().settings;
 
         let client_list_rwlock = self.get_clients();
 
-        let mut clients = client_list_rwlock.read().await;
+        let mut clients = client_list_rwlock.write().await;
 
-        let mut client = self.find_client(&clients, peer).await;
-
-        if client.is_none() {
-            drop(clients);
-            let index = {
-                let mut clients = client_list_rwlock.write().await;
-                self.create_client(&mut clients, peer)
-            };
-            clients = client_list_rwlock.read().await;
-            client = Some(&clients[index]);
-        }
-        let mut client = client.unwrap().write().await;
+        let mut client = clients
+            .entry(peer)
+            .or_insert_with(|| {
+                RwLock::new(ClientConnection::new(
+                    peer,
+                    settings.create_client_context(),
+                ))
+            })
+            .write()
+            .await;
 
         let packet = client.read_packet(message)?;
 
@@ -283,17 +246,7 @@ pub trait Server: EventHandler {
     async fn kick(&self, addr: SocketAddr) {
         let client_rwlock = self.get_clients();
         let mut clients = client_rwlock.write().await;
-        let mut client_index = None;
-        for (i, client) in clients.iter().enumerate() {
-            if client.read().await.get_address() == addr {
-                client_index = Some(i);
-                break;
-            }
-        }
-
-        if let Some(index) = client_index {
-            clients.remove(index);
-        }
+        clients.remove(&addr);
     }
 
     async fn send_ping(&self, client: &mut ClientConnection) -> ServerResult<()> {
@@ -536,7 +489,7 @@ mod test {
         let server = TestServer::default();
         let client_rwlock = server.get_clients();
         let mut clients = client_rwlock.write().await;
-        clients.push(RwLock::new(client));
+        clients.insert(client.get_address(), RwLock::new(client));
 
         server
     }

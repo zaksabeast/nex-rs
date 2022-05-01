@@ -39,12 +39,8 @@ impl ClientConnection {
         packet.to_bytes(&self.context.signature_context)
     }
 
-    pub fn read_packet(&mut self, data: Vec<u8>) -> PacketResult<PacketV1> {
-        PacketV1::read_packet(
-            data,
-            self.context.flags_version,
-            &self.context.signature_context,
-        )
+    pub fn validate_packet(&mut self, packet: &PacketV1) -> PacketResult<()> {
+        packet.validate(&self.context.signature_context)
     }
 
     pub fn new_data_packet(&self, payload: Vec<u8>) -> PacketV1 {

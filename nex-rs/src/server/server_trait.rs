@@ -258,7 +258,8 @@ pub trait Server: EventHandler {
         }
         let mut client = client.unwrap().write().await;
 
-        let packet = client.read_packet(message)?;
+        let packet = PacketV1::read_packet(message, self.get_flags_version())?;
+        client.validate_packet(&packet)?;
 
         if self.should_ignore_packet(&mut client, &packet) {
             return Ok(());

@@ -4,7 +4,7 @@ use crate::packet::{
 };
 use hmac::{Hmac, Mac};
 use md5::Md5;
-use no_std_io::{Cursor, Reader, StreamContainer, StreamReader, StreamWriter};
+use no_std_io::{Reader, StreamContainer, StreamReader, StreamWriter};
 
 #[derive(Debug, Default)]
 pub struct PacketV1 {
@@ -19,10 +19,7 @@ impl Packet for PacketV1 {
     const VERSION: u8 = 1;
 
     fn to_bytes(self: &PacketV1, context: &SignatureContext) -> Vec<u8> {
-        let raw_options = self
-            .options
-            .as_bytes(&self.header.packet_type(self.flags_version));
-
+        let raw_options = self.raw_options();
         let options_len: u8 = raw_options
             .len()
             .try_into()
@@ -210,23 +207,30 @@ impl PacketV1 {
         }
     }
 
-    pub fn read_packet(
-        data: Vec<u8>,
-        flags_version: u32,
-        context: &SignatureContext,
-    ) -> PacketResult<Self> {
-        let data_len = data.len();
-
+    pub fn read_packet(data: Vec<u8>, flags_version: u32) -> PacketResult<Self> {
         let mut packet = PacketV1 {
             flags_version,
             ..Self::default()
         };
 
-        if data_len > 0 {
-            packet.decode(data, context)?;
-        }
+        let mut stream = StreamContainer::new(data.as_slice());
+
+        packet.header = stream.read_stream_le::<PacketV1Header>()?;
+        packet.signature = stream.read_byte_stream(16)?;
+
+        let options_len = usize::from(packet.header.options_length());
+        let raw_options = stream.read_byte_stream(options_len)?;
+        packet.options = raw_options.read_le(0)?;
+
+        let payload_size = usize::from(packet.header.payload_size());
+        packet.payload = stream.read_byte_stream(payload_size)?;
 
         Ok(packet)
+    }
+
+    pub fn raw_options(&self) -> Vec<u8> {
+        self.options
+            .as_bytes(&self.header.packet_type(self.flags_version))
     }
 
     pub fn get_substream_id(&self) -> u8 {
@@ -257,46 +261,27 @@ impl PacketV1 {
         self.options.maximum_substream_id = value;
     }
 
-    fn decode(&mut self, data: Vec<u8>, context: &SignatureContext) -> PacketResult<()> {
-        let data_len = data.len();
-
-        // magic + header + signature
-        if data_len < 30 {
-            return Err(Error::InvalidSize {
-                wanted_size: 30,
-                received_size: data_len,
-                context: "Data length is less than the smallest possible packet size",
-            });
+    pub fn validate(&self, context: &SignatureContext) -> PacketResult<()> {
+        let magic = self.header.magic();
+        if magic != 0xd0ea {
+            return Err(Error::InvalidMagic { magic });
         }
 
-        let mut stream = StreamContainer::new(data.as_slice());
-
-        self.header = stream.default_read_stream_le::<PacketV1Header>();
-        self.signature = stream.default_read_byte_stream(16).try_into().unwrap();
-
-        let options_length = usize::from(self.header.options_length());
-        let options_end = stream.get_index() + options_length;
-        if data_len < options_end {
-            return Err(Error::InvalidSize {
-                wanted_size: options_end,
-                received_size: data_len,
-                context: "The options length does not fit into the packet data length",
-            });
+        let version = self.header.version();
+        if version != Self::VERSION {
+            return Err(Error::InvalidVersion { version });
         }
 
-        let raw_options = stream.default_read_byte_stream(options_length);
-        self.options = raw_options.default_read_le(0);
+        self.validate_signature(context)
+    }
 
-        let payload_size = usize::from(self.header.payload_size());
-        if payload_size > 0 {
-            self.payload = stream.default_read_byte_stream(payload_size);
-        }
-
+    pub fn validate_signature(&self, context: &SignatureContext) -> PacketResult<()> {
+        let raw_header = self.header.raw();
         let calculated_signature = Self::calculate_signature(
-            &data[2..14].try_into().unwrap(),
+            &raw_header[2..14].try_into().unwrap(),
             &self.payload,
             context.server_connection_signature(),
-            &raw_options,
+            &self.raw_options(),
             context,
         );
 
@@ -350,8 +335,8 @@ mod test {
         let bytes = BASE_PACKET.to_vec();
         let flags_version = 1;
         let context = SignatureContext::default();
-        let packet = PacketV1::read_packet(bytes.clone(), flags_version, &context)
-            .expect("Should have succeeded!");
+        let packet =
+            PacketV1::read_packet(bytes.clone(), flags_version).expect("Should have succeeded!");
         let result = packet.to_bytes(&context);
         assert_eq!(result, bytes);
     }
@@ -370,15 +355,18 @@ mod test {
             ];
 
             let flags_version = 1;
-            let context = SignatureContext::default();
-            let packet = PacketV1::read_packet(bytes, flags_version, &context)
-                .expect("Should have succeeded!");
+            let packet =
+                PacketV1::read_packet(bytes, flags_version).expect("Should have succeeded!");
 
             assert_eq!(packet.get_packet_type(), PacketType::Syn);
             assert_eq!(packet.get_flags().needs_ack(), true);
             assert_eq!(packet.get_flags().has_size(), true);
             assert_eq!(packet.options.supported_functions, 4);
             assert_eq!(packet.options.maximum_substream_id, 1);
+            assert_eq!(
+                packet.validate_signature(&SignatureContext::default()),
+                Ok(())
+            )
         }
 
         #[test]
@@ -386,8 +374,8 @@ mod test {
             let bytes = BASE_PACKET.to_vec();
             let flags_version = 1;
             let context = SignatureContext::default();
-            let mut packet = PacketV1::read_packet(bytes, flags_version, &context)
-                .expect("Should have succeeded!");
+            let mut packet =
+                PacketV1::read_packet(bytes, flags_version).expect("Should have succeeded!");
 
             packet.set_packet_type(PacketType::Syn);
             packet.set_flags(PacketFlag::NeedsAck | PacketFlag::HasSize);
@@ -420,9 +408,8 @@ mod test {
             ];
 
             let flags_version = 1;
-            let context = SignatureContext::default();
-            let packet = PacketV1::read_packet(bytes, flags_version, &context)
-                .expect("Should have succeeded!");
+            let packet =
+                PacketV1::read_packet(bytes, flags_version).expect("Should have succeeded!");
 
             assert_eq!(packet.get_packet_type(), PacketType::Connect);
             assert_eq!(packet.get_flags().reliable(), true);
@@ -433,6 +420,10 @@ mod test {
             assert_eq!(packet.options.maximum_substream_id, 0);
             assert_eq!(packet.options.initial_sequence_id, 0xabcd);
             assert_eq!(packet.payload, vec![0xaa]);
+            assert_eq!(
+                packet.validate_signature(&SignatureContext::default()),
+                Ok(())
+            )
         }
 
         #[test]
@@ -440,8 +431,8 @@ mod test {
             let bytes = BASE_PACKET.to_vec();
             let flags_version = 1;
             let context = SignatureContext::default();
-            let mut packet = PacketV1::read_packet(bytes, flags_version, &context)
-                .expect("Should have succeeded!");
+            let mut packet =
+                PacketV1::read_packet(bytes, flags_version).expect("Should have succeeded!");
 
             packet.set_packet_type(PacketType::Connect);
             packet.set_flags(PacketFlag::Reliable | PacketFlag::NeedsAck | PacketFlag::HasSize);
@@ -476,9 +467,8 @@ mod test {
             ];
 
             let flags_version = 1;
-            let context = SignatureContext::default();
-            let packet = PacketV1::read_packet(bytes, flags_version, &context)
-                .expect("Should have succeeded!");
+            let packet =
+                PacketV1::read_packet(bytes, flags_version).expect("Should have succeeded!");
 
             assert_eq!(packet.get_packet_type(), PacketType::Data);
             assert_eq!(packet.get_flags().reliable(), true);
@@ -493,6 +483,10 @@ mod test {
                     0x6d, 0x91, 0x6e, 0xc4
                 ]
             );
+            assert_eq!(
+                packet.validate_signature(&SignatureContext::default()),
+                Ok(())
+            )
         }
 
         #[test]
@@ -500,8 +494,8 @@ mod test {
             let bytes = BASE_PACKET.to_vec();
             let flags_version = 1;
             let context = SignatureContext::default();
-            let mut packet = PacketV1::read_packet(bytes, flags_version, &context)
-                .expect("Should have succeeded!");
+            let mut packet =
+                PacketV1::read_packet(bytes, flags_version).expect("Should have succeeded!");
 
             packet.set_packet_type(PacketType::Data);
             packet.set_flags(PacketFlag::Reliable | PacketFlag::NeedsAck | PacketFlag::HasSize);
@@ -534,15 +528,18 @@ mod test {
                 0x5b, 0x10,
             ];
             let flags_version = 1;
-            let context = SignatureContext::default();
-            let packet = PacketV1::read_packet(bytes, flags_version, &context)
-                .expect("Should have succeeded!");
+            let packet =
+                PacketV1::read_packet(bytes, flags_version).expect("Should have succeeded!");
 
             assert_eq!(packet.get_packet_type(), PacketType::Disconnect);
             assert_eq!(packet.get_flags().reliable(), true);
             assert_eq!(packet.get_flags().needs_ack(), true);
             assert_eq!(packet.get_flags().has_size(), true);
             assert_eq!(packet.get_session_id(), 1);
+            assert_eq!(
+                packet.validate_signature(&SignatureContext::default()),
+                Ok(())
+            )
         }
 
         #[test]
@@ -550,8 +547,8 @@ mod test {
             let bytes = BASE_PACKET.to_vec();
             let flags_version = 1;
             let context = SignatureContext::default();
-            let mut packet = PacketV1::read_packet(bytes, flags_version, &context)
-                .expect("Should have succeeded!");
+            let mut packet =
+                PacketV1::read_packet(bytes, flags_version).expect("Should have succeeded!");
 
             packet.set_packet_type(PacketType::Disconnect);
             packet.set_flags(PacketFlag::Reliable | PacketFlag::NeedsAck | PacketFlag::HasSize);
@@ -578,14 +575,17 @@ mod test {
                 0x91, 0x2b,
             ];
             let flags_version = 1;
-            let context = SignatureContext::default();
-            let packet = PacketV1::read_packet(bytes, flags_version, &context)
-                .expect("Should have succeeded!");
+            let packet =
+                PacketV1::read_packet(bytes, flags_version).expect("Should have succeeded!");
 
             assert_eq!(packet.get_packet_type(), PacketType::Ping);
             assert_eq!(packet.get_flags().needs_ack(), true);
             assert_eq!(packet.get_flags().has_size(), true);
             assert_eq!(packet.get_session_id(), 1);
+            assert_eq!(
+                packet.validate_signature(&SignatureContext::default()),
+                Ok(())
+            )
         }
 
         #[test]
@@ -593,8 +593,8 @@ mod test {
             let bytes = BASE_PACKET.to_vec();
             let flags_version = 1;
             let context = SignatureContext::default();
-            let mut packet = PacketV1::read_packet(bytes, flags_version, &context)
-                .expect("Should have succeeded!");
+            let mut packet =
+                PacketV1::read_packet(bytes, flags_version).expect("Should have succeeded!");
 
             packet.set_packet_type(PacketType::Ping);
             packet.set_flags(PacketFlag::NeedsAck | PacketFlag::HasSize);

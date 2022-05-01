@@ -14,6 +14,10 @@ impl PacketV1Header {
         Self { raw }
     }
 
+    pub fn raw(&self) -> &[u8; HEADER_SIZE] {
+        &self.raw
+    }
+
     pub fn flags(&self, flags_version: u32) -> PacketFlags {
         let shift = if flags_version == 0 { 3 } else { 4 };
         let flags = self.type_flags() >> shift;

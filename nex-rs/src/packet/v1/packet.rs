@@ -3,31 +3,23 @@ use super::{
     options::PacketV1Options,
 };
 use crate::packet::{
-    BasePacket, Error, Packet, PacketFlag, PacketOption, PacketResult, PacketType, SignatureContext,
+    Error, Packet, PacketFlag, PacketFlags, PacketResult, PacketType, SignatureContext,
 };
 use hmac::{Hmac, Mac};
 use md5::Md5;
-use no_std_io::{Cursor, Reader, StreamContainer, StreamReader, StreamWriter, Writer};
+use no_std_io::{Cursor, Reader, StreamContainer, StreamReader, StreamWriter};
 
 #[derive(Debug, Default)]
 pub struct PacketV1 {
     flags_version: u32,
     header: PacketV1Header,
-    signature: [u8; 16],
+    signature: Vec<u8>,
     options: PacketV1Options,
     payload: Vec<u8>,
 }
 
 impl Packet for PacketV1 {
     const VERSION: u8 = 1;
-
-    fn get_base(&self) -> &BasePacket {
-        unimplemented!()
-    }
-
-    fn get_mut_base(&mut self) -> &mut BasePacket {
-        unimplemented!()
-    }
 
     fn to_bytes(self: &PacketV1, flags_version: u32, context: &SignatureContext) -> Vec<u8> {
         let raw_options = self.options.as_bytes(&self.header.packet_type);
@@ -68,6 +60,79 @@ impl Packet for PacketV1 {
         }
 
         stream.into_raw()
+    }
+
+    fn get_source(&self) -> u8 {
+        self.header.source
+    }
+    fn set_source(&mut self, value: u8) {
+        self.header.source = value;
+    }
+
+    fn get_destination(&self) -> u8 {
+        self.header.destination
+    }
+    fn set_destination(&mut self, value: u8) {
+        self.header.destination = value;
+    }
+
+    fn get_packet_type(&self) -> PacketType {
+        self.header.packet_type
+    }
+    fn set_packet_type(&mut self, value: PacketType) {
+        self.header.packet_type = value;
+    }
+
+    fn get_flags(&self) -> PacketFlags {
+        self.header.flags
+    }
+    fn get_mut_flags(&mut self) -> &mut PacketFlags {
+        &mut self.header.flags
+    }
+    fn set_flags(&mut self, value: PacketFlags) {
+        self.header.flags = value;
+    }
+
+    fn get_session_id(&self) -> u8 {
+        self.header.session_id
+    }
+    fn set_session_id(&mut self, value: u8) {
+        self.header.session_id = value;
+    }
+
+    fn get_signature(&self) -> &[u8] {
+        &self.signature
+    }
+    fn set_signature(&mut self, value: Vec<u8>) {
+        self.signature = value;
+    }
+
+    fn get_sequence_id(&self) -> u16 {
+        self.header.sequence_id
+    }
+    fn set_sequence_id(&mut self, value: u16) {
+        self.header.sequence_id = value;
+    }
+
+    fn get_connection_signature(&self) -> &[u8] {
+        &self.options.connection_signature
+    }
+    fn set_connection_signature(&mut self, value: Vec<u8>) {
+        self.options.connection_signature = value;
+    }
+
+    fn get_fragment_id(&self) -> u8 {
+        self.options.fragment_id
+    }
+    fn set_fragment_id(&mut self, value: u8) {
+        self.options.fragment_id = value;
+    }
+
+    fn get_payload(&self) -> &[u8] {
+        &self.payload
+    }
+    fn set_payload(&mut self, value: Vec<u8>) {
+        self.payload = value;
     }
 }
 

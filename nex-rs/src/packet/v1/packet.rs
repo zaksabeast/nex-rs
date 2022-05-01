@@ -1,7 +1,9 @@
-use super::{header::PacketV1Header, options::PacketV1Options};
+use super::{
+    header::{PacketV1Header, RawPacketV1Header},
+    options::PacketV1Options,
+};
 use crate::packet::{
-    BasePacket, Error, Packet, PacketFlag, PacketFlags, PacketOption, PacketResult, PacketType,
-    SignatureContext,
+    BasePacket, Error, Packet, PacketFlag, PacketOption, PacketResult, PacketType, SignatureContext,
 };
 use hmac::{Hmac, Mac};
 use md5::Md5;
@@ -27,41 +29,25 @@ impl Packet for PacketV1 {
         unimplemented!()
     }
 
-    fn to_bytes(self: &mut PacketV1, flags_version: u32, context: &SignatureContext) -> Vec<u8> {
-        if self.header.packet_type == PacketType::Data && !self.header.flags.has_size() {
-            self.header.flags |= PacketFlag::HasSize;
-        }
-
-        let type_flags: u16 = if flags_version == 0 {
-            u16::from(self.header.packet_type) | u16::from(self.header.flags) << 3
-        } else {
-            u16::from(self.header.packet_type) | u16::from(self.header.flags) << 4
-        };
-
-        let mut stream = StreamContainer::new(vec![]);
-
-        stream.checked_write_stream_le(&0xd0eau16); // v1 magic
-        stream.checked_write_stream_le(&1u8);
-
+    fn to_bytes(self: &PacketV1, flags_version: u32, context: &SignatureContext) -> Vec<u8> {
         let options = self.encode_options();
+
         let options_len: u8 = options
             .len()
             .try_into()
             .expect("Options length is too large");
-        let payload_len: u16 = self
+        let payload_size: u16 = self
             .payload
             .len()
             .try_into()
             .expect("Payload length is too large");
 
-        stream.checked_write_stream_le(&options_len);
-        stream.checked_write_stream_le(&payload_len);
-        stream.checked_write_stream_le(&self.header.source);
-        stream.checked_write_stream_le(&self.header.destination);
-        stream.checked_write_stream_le(&type_flags);
-        stream.checked_write_stream_le(&self.header.session_id);
-        stream.checked_write_stream_le(&self.header.substream_id);
-        stream.checked_write_stream_le(&self.header.sequence_id);
+        let mut raw_header = self.header.into_raw(flags_version);
+        raw_header.options_length = options_len;
+        raw_header.payload_size = payload_size;
+
+        let mut stream = StreamContainer::new(vec![]);
+        stream.checked_write_stream_le(&raw_header);
 
         let signature = Self::calculate_signature(
             &stream.get_slice()[2..14].try_into().unwrap(),
@@ -217,45 +203,13 @@ impl PacketV1 {
 
         let mut stream = StreamContainer::new(data.as_slice());
 
-        self.header.magic = stream.default_read_stream_le();
+        self.header = stream
+            .default_read_stream_le::<RawPacketV1Header>()
+            .into_header(flags_version)?;
 
-        if self.header.magic != 0xd0ea {
-            return Err(Error::InvalidMagic {
-                magic: self.header.magic,
-            });
-        }
-
-        let version: u8 = stream.default_read_stream_le();
-        if version != Self::VERSION {
-            return Err(Error::InvalidVersion { version });
-        }
-
-        let options_length = usize::from(stream.default_read_stream_le::<u8>());
-        let payload_size = usize::from(stream.default_read_stream_le::<u16>());
-
-        self.header.source = stream.default_read_stream_le();
-        self.header.destination = stream.default_read_stream_le();
-
-        let type_flags: u16 = stream.default_read_stream_le();
-        let packet_type;
-        let flags;
-
-        if flags_version == 0 {
-            packet_type = type_flags & 0x7;
-            flags = type_flags >> 0x3;
-        } else {
-            packet_type = type_flags & 0xf;
-            flags = type_flags >> 0x4;
-        }
-
-        self.header.packet_type = packet_type.try_into()?;
-        self.header.flags = PacketFlags::new(flags);
-
-        self.header.session_id = stream.default_read_stream_le();
-        self.header.substream_id = stream.default_read_stream_le();
-        self.header.sequence_id = stream.default_read_stream_le();
         self.signature = stream.default_read_byte_stream(16).try_into().unwrap();
 
+        let options_length = usize::from(self.header.options_length);
         let options_end = stream.get_index() + options_length;
         if data_len < options_end {
             return Err(Error::InvalidSize {
@@ -269,6 +223,7 @@ impl PacketV1 {
 
         self.decode_options(&options)?;
 
+        let payload_size = usize::from(self.header.payload_size);
         if payload_size > 0 {
             self.payload = stream.default_read_byte_stream(payload_size);
         }
@@ -402,7 +357,7 @@ mod test {
         let bytes = BASE_PACKET.to_vec();
         let flags_version = 1;
         let context = SignatureContext::default();
-        let mut packet = PacketV1::read_packet(bytes.clone(), flags_version, &context)
+        let packet = PacketV1::read_packet(bytes.clone(), flags_version, &context)
             .expect("Should have succeeded!");
         let result = packet.to_bytes(flags_version, &context);
         assert_eq!(result, bytes);

@@ -22,7 +22,7 @@ pub trait Packet {
 
     fn get_base(&self) -> &BasePacket;
     fn get_mut_base(&mut self) -> &mut BasePacket;
-    fn to_bytes(&mut self, flags_version: u32, context: &SignatureContext) -> Vec<u8>;
+    fn to_bytes(&self, flags_version: u32, context: &SignatureContext) -> Vec<u8>;
 
     fn get_source(&self) -> u8 {
         self.get_base().source

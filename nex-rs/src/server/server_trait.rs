@@ -160,8 +160,9 @@ pub trait Server: EventHandler {
             return true;
         }
 
-        // Ignore packets we've already handled
-        if packet_type != PacketType::Ping && packet.get_sequence_id() < client.get_sequence_id_in()
+        // Ignore packets we're not expecting
+        if packet_type != PacketType::Ping
+            && packet.get_sequence_id() != client.get_sequence_id_in()
         {
             return true;
         }

@@ -1,7 +1,4 @@
-use super::{
-    header::{PacketV1Header, RawPacketV1Header},
-    options::PacketV1Options,
-};
+use super::{header::PacketV1Header, options::PacketV1Options};
 use crate::packet::{
     Error, Packet, PacketFlag, PacketFlags, PacketResult, PacketType, SignatureContext,
 };
@@ -22,7 +19,9 @@ impl Packet for PacketV1 {
     const VERSION: u8 = 1;
 
     fn to_bytes(self: &PacketV1, context: &SignatureContext) -> Vec<u8> {
-        let raw_options = self.options.as_bytes(&self.header.packet_type);
+        let raw_options = self
+            .options
+            .as_bytes(&self.header.packet_type(self.flags_version));
 
         let options_len: u8 = raw_options
             .len()
@@ -34,12 +33,12 @@ impl Packet for PacketV1 {
             .try_into()
             .expect("Payload length is too large");
 
-        let mut raw_header = self.header.into_raw(self.flags_version);
-        raw_header.options_length = options_len;
-        raw_header.payload_size = payload_size;
+        let mut header = self.header;
+        header.set_options_length(options_len);
+        header.set_payload_size(payload_size);
 
         let mut stream = StreamContainer::new(vec![]);
-        stream.checked_write_stream_le(&raw_header);
+        stream.checked_write_stream_le(&header);
 
         let signature = Self::calculate_signature(
             &stream.get_slice()[2..14].try_into().unwrap(),
@@ -63,41 +62,38 @@ impl Packet for PacketV1 {
     }
 
     fn get_source(&self) -> u8 {
-        self.header.source
+        self.header.source()
     }
     fn set_source(&mut self, value: u8) {
-        self.header.source = value;
+        self.header.set_source(value);
     }
 
     fn get_destination(&self) -> u8 {
-        self.header.destination
+        self.header.destination()
     }
     fn set_destination(&mut self, value: u8) {
-        self.header.destination = value;
+        self.header.set_destination(value);
     }
 
     fn get_packet_type(&self) -> PacketType {
-        self.header.packet_type
+        self.header.packet_type(self.flags_version)
     }
     fn set_packet_type(&mut self, value: PacketType) {
-        self.header.packet_type = value;
+        self.header.set_packet_type(self.flags_version, value);
     }
 
     fn get_flags(&self) -> PacketFlags {
-        self.header.flags
-    }
-    fn get_mut_flags(&mut self) -> &mut PacketFlags {
-        &mut self.header.flags
+        self.header.flags(self.flags_version)
     }
     fn set_flags(&mut self, value: PacketFlags) {
-        self.header.flags = value;
+        self.header.set_flags(self.flags_version, value);
     }
 
     fn get_session_id(&self) -> u8 {
-        self.header.session_id
+        self.header.session_id()
     }
     fn set_session_id(&mut self, value: u8) {
-        self.header.session_id = value;
+        self.header.set_session_id(value);
     }
 
     fn get_signature(&self) -> &[u8] {
@@ -108,10 +104,10 @@ impl Packet for PacketV1 {
     }
 
     fn get_sequence_id(&self) -> u16 {
-        self.header.sequence_id
+        self.header.sequence_id()
     }
     fn set_sequence_id(&mut self, value: u16) {
-        self.header.sequence_id = value;
+        self.header.set_sequence_id(value);
     }
 
     fn get_connection_signature(&self) -> &[u8] {
@@ -138,14 +134,14 @@ impl Packet for PacketV1 {
 
 impl PacketV1 {
     pub fn new_ping_packet(flags_version: u32) -> Self {
+        let mut header = PacketV1Header::default();
+        header.set_source(Self::SERVER_ID);
+        header.set_destination(Self::CLIENT_ID);
+        header.set_packet_type(flags_version, PacketType::Ping);
+        header.set_flags(flags_version, PacketFlag::Ack | PacketFlag::Reliable);
+
         Self {
-            header: PacketV1Header {
-                source: Self::SERVER_ID,
-                destination: Self::CLIENT_ID,
-                packet_type: PacketType::Ping,
-                flags: PacketFlag::Ack | PacketFlag::Reliable,
-                ..Default::default()
-            },
+            header,
             flags_version,
             ..Default::default()
         }
@@ -157,15 +153,18 @@ impl PacketV1 {
         payload: Vec<u8>,
         flags_version: u32,
     ) -> Self {
+        let mut header = PacketV1Header::default();
+        header.set_session_id(session_id);
+        header.set_source(Self::SERVER_ID);
+        header.set_destination(Self::CLIENT_ID);
+        header.set_packet_type(flags_version, PacketType::Data);
+        header.set_flags(
+            flags_version,
+            PacketFlag::Reliable | PacketFlag::NeedsAck | PacketFlag::HasSize,
+        );
+
         Self {
-            header: PacketV1Header {
-                session_id,
-                source: Self::SERVER_ID,
-                destination: Self::CLIENT_ID,
-                flags: PacketFlag::Reliable | PacketFlag::NeedsAck | PacketFlag::HasSize,
-                packet_type: PacketType::Data,
-                ..Default::default()
-            },
+            header,
             payload,
             options: PacketV1Options {
                 connection_signature,
@@ -177,30 +176,32 @@ impl PacketV1 {
     }
 
     pub fn new_disconnect_packet(flags_version: u32) -> Self {
+        let mut header = PacketV1Header::default();
+        header.set_source(Self::SERVER_ID);
+        header.set_destination(Self::CLIENT_ID);
+        header.set_packet_type(flags_version, PacketType::Disconnect);
+        header.set_flags(
+            flags_version,
+            PacketFlag::Reliable | PacketFlag::NeedsAck | PacketFlag::HasSize,
+        );
+
         Self {
-            header: PacketV1Header {
-                source: Self::SERVER_ID,
-                destination: Self::CLIENT_ID,
-                flags: PacketFlag::Reliable | PacketFlag::NeedsAck | PacketFlag::HasSize,
-                packet_type: PacketType::Disconnect,
-                ..Default::default()
-            },
+            header,
             flags_version,
             ..Default::default()
         }
     }
 
     pub fn new_ack_packet(&self) -> Self {
+        let mut header = PacketV1Header::default();
+        header.set_source(self.get_destination());
+        header.set_destination(self.get_source());
+        header.set_packet_type(self.flags_version, self.get_packet_type());
+        header.set_flags(self.flags_version, PacketFlag::Ack | PacketFlag::HasSize);
+        header.set_substream_id(0);
+
         Self {
-            header: PacketV1Header {
-                source: self.get_destination(),
-                destination: self.get_source(),
-                packet_type: self.get_packet_type(),
-                sequence_id: self.get_sequence_id(),
-                flags: PacketFlag::Ack | PacketFlag::HasSize,
-                substream_id: 0,
-                ..Default::default()
-            },
+            header,
             options: PacketV1Options {
                 fragment_id: self.get_fragment_id(),
                 ..Default::default()
@@ -229,10 +230,10 @@ impl PacketV1 {
     }
 
     pub fn get_substream_id(&self) -> u8 {
-        self.header.substream_id
+        self.header.substream_id()
     }
     pub fn set_substream_id(&mut self, value: u8) {
-        self.header.substream_id = value;
+        self.header.set_substream_id(value);
     }
 
     pub fn get_supported_functions(&self) -> u32 {
@@ -270,13 +271,10 @@ impl PacketV1 {
 
         let mut stream = StreamContainer::new(data.as_slice());
 
-        self.header = stream
-            .default_read_stream_le::<RawPacketV1Header>()
-            .into_header(self.flags_version)?;
-
+        self.header = stream.default_read_stream_le::<PacketV1Header>();
         self.signature = stream.default_read_byte_stream(16).try_into().unwrap();
 
-        let options_length = usize::from(self.header.options_length);
+        let options_length = usize::from(self.header.options_length());
         let options_end = stream.get_index() + options_length;
         if data_len < options_end {
             return Err(Error::InvalidSize {
@@ -289,7 +287,7 @@ impl PacketV1 {
         let raw_options = stream.default_read_byte_stream(options_length);
         self.options = raw_options.default_read_le(0);
 
-        let payload_size = usize::from(self.header.payload_size);
+        let payload_size = usize::from(self.header.payload_size());
         if payload_size > 0 {
             self.payload = stream.default_read_byte_stream(payload_size);
         }
@@ -306,8 +304,8 @@ impl PacketV1 {
             return Err(Error::InvalidSignature {
                 calculated_signature,
                 found_signature: self.signature.to_vec(),
-                packet_type: self.header.packet_type,
-                sequence_id: self.header.sequence_id,
+                packet_type: self.get_packet_type(),
+                sequence_id: self.get_sequence_id(),
             });
         }
 
@@ -376,9 +374,9 @@ mod test {
             let packet = PacketV1::read_packet(bytes, flags_version, &context)
                 .expect("Should have succeeded!");
 
-            assert_eq!(packet.header.packet_type, PacketType::Syn);
-            assert_eq!(packet.header.flags.needs_ack(), true);
-            assert_eq!(packet.header.flags.has_size(), true);
+            assert_eq!(packet.get_packet_type(), PacketType::Syn);
+            assert_eq!(packet.get_flags().needs_ack(), true);
+            assert_eq!(packet.get_flags().has_size(), true);
             assert_eq!(packet.options.supported_functions, 4);
             assert_eq!(packet.options.maximum_substream_id, 1);
         }
@@ -391,10 +389,8 @@ mod test {
             let mut packet = PacketV1::read_packet(bytes, flags_version, &context)
                 .expect("Should have succeeded!");
 
-            packet.header.packet_type = PacketType::Syn;
-            packet.header.flags.clear_flags();
-            packet.header.flags.set_flag(PacketFlag::NeedsAck);
-            packet.header.flags.set_flag(PacketFlag::HasSize);
+            packet.set_packet_type(PacketType::Syn);
+            packet.set_flags(PacketFlag::NeedsAck | PacketFlag::HasSize);
             packet.options.supported_functions = 4;
             packet.options.maximum_substream_id = 1;
 
@@ -428,11 +424,11 @@ mod test {
             let packet = PacketV1::read_packet(bytes, flags_version, &context)
                 .expect("Should have succeeded!");
 
-            assert_eq!(packet.header.packet_type, PacketType::Connect);
-            assert_eq!(packet.header.flags.reliable(), true);
-            assert_eq!(packet.header.flags.needs_ack(), true);
-            assert_eq!(packet.header.flags.has_size(), true);
-            assert_eq!(packet.header.session_id, 1);
+            assert_eq!(packet.get_packet_type(), PacketType::Connect);
+            assert_eq!(packet.get_flags().reliable(), true);
+            assert_eq!(packet.get_flags().needs_ack(), true);
+            assert_eq!(packet.get_flags().has_size(), true);
+            assert_eq!(packet.get_session_id(), 1);
             assert_eq!(packet.options.supported_functions, 4);
             assert_eq!(packet.options.maximum_substream_id, 0);
             assert_eq!(packet.options.initial_sequence_id, 0xabcd);
@@ -447,12 +443,9 @@ mod test {
             let mut packet = PacketV1::read_packet(bytes, flags_version, &context)
                 .expect("Should have succeeded!");
 
-            packet.header.packet_type = PacketType::Connect;
-            packet.header.flags.clear_flags();
-            packet.header.flags.set_flag(PacketFlag::Reliable);
-            packet.header.flags.set_flag(PacketFlag::NeedsAck);
-            packet.header.flags.set_flag(PacketFlag::HasSize);
-            packet.header.session_id = 1;
+            packet.set_packet_type(PacketType::Connect);
+            packet.set_flags(PacketFlag::Reliable | PacketFlag::NeedsAck | PacketFlag::HasSize);
+            packet.set_session_id(1);
             packet.options.supported_functions = 4;
             packet.options.maximum_substream_id = 0;
             packet.options.initial_sequence_id = 0xabcd;
@@ -487,11 +480,11 @@ mod test {
             let packet = PacketV1::read_packet(bytes, flags_version, &context)
                 .expect("Should have succeeded!");
 
-            assert_eq!(packet.header.packet_type, PacketType::Data);
-            assert_eq!(packet.header.flags.reliable(), true);
-            assert_eq!(packet.header.flags.needs_ack(), true);
-            assert_eq!(packet.header.flags.has_size(), true);
-            assert_eq!(packet.header.session_id, 1);
+            assert_eq!(packet.get_packet_type(), PacketType::Data);
+            assert_eq!(packet.get_flags().reliable(), true);
+            assert_eq!(packet.get_flags().needs_ack(), true);
+            assert_eq!(packet.get_flags().has_size(), true);
+            assert_eq!(packet.get_session_id(), 1);
             assert_eq!(packet.options.fragment_id, 0);
             assert_eq!(
                 packet.payload,
@@ -510,12 +503,9 @@ mod test {
             let mut packet = PacketV1::read_packet(bytes, flags_version, &context)
                 .expect("Should have succeeded!");
 
-            packet.header.packet_type = PacketType::Data;
-            packet.header.flags.clear_flags();
-            packet.header.flags.set_flag(PacketFlag::Reliable);
-            packet.header.flags.set_flag(PacketFlag::NeedsAck);
-            packet.header.flags.set_flag(PacketFlag::HasSize);
-            packet.header.session_id = 1;
+            packet.set_packet_type(PacketType::Data);
+            packet.set_flags(PacketFlag::Reliable | PacketFlag::NeedsAck | PacketFlag::HasSize);
+            packet.set_session_id(1);
             packet.options.fragment_id = 0;
             packet.payload = vec![
                 0x0d, 0x00, 0x00, 0x00, 0xaa, 0x01, 0x01, 0x01, 0x01, 0x02, 0x02, 0x02, 0x02, 0x03,
@@ -548,11 +538,11 @@ mod test {
             let packet = PacketV1::read_packet(bytes, flags_version, &context)
                 .expect("Should have succeeded!");
 
-            assert_eq!(packet.header.packet_type, PacketType::Disconnect);
-            assert_eq!(packet.header.flags.reliable(), true);
-            assert_eq!(packet.header.flags.needs_ack(), true);
-            assert_eq!(packet.header.flags.has_size(), true);
-            assert_eq!(packet.header.session_id, 1);
+            assert_eq!(packet.get_packet_type(), PacketType::Disconnect);
+            assert_eq!(packet.get_flags().reliable(), true);
+            assert_eq!(packet.get_flags().needs_ack(), true);
+            assert_eq!(packet.get_flags().has_size(), true);
+            assert_eq!(packet.get_session_id(), 1);
         }
 
         #[test]
@@ -563,12 +553,9 @@ mod test {
             let mut packet = PacketV1::read_packet(bytes, flags_version, &context)
                 .expect("Should have succeeded!");
 
-            packet.header.packet_type = PacketType::Disconnect;
-            packet.header.flags.clear_flags();
-            packet.header.flags.set_flag(PacketFlag::Reliable);
-            packet.header.flags.set_flag(PacketFlag::NeedsAck);
-            packet.header.flags.set_flag(PacketFlag::HasSize);
-            packet.header.session_id = 1;
+            packet.set_packet_type(PacketType::Disconnect);
+            packet.set_flags(PacketFlag::Reliable | PacketFlag::NeedsAck | PacketFlag::HasSize);
+            packet.set_session_id(1);
 
             let result: Vec<u8> = packet.to_bytes(&context);
             let expected_result = vec![
@@ -595,10 +582,10 @@ mod test {
             let packet = PacketV1::read_packet(bytes, flags_version, &context)
                 .expect("Should have succeeded!");
 
-            assert_eq!(packet.header.packet_type, PacketType::Ping);
-            assert_eq!(packet.header.flags.needs_ack(), true);
-            assert_eq!(packet.header.flags.has_size(), true);
-            assert_eq!(packet.header.session_id, 1);
+            assert_eq!(packet.get_packet_type(), PacketType::Ping);
+            assert_eq!(packet.get_flags().needs_ack(), true);
+            assert_eq!(packet.get_flags().has_size(), true);
+            assert_eq!(packet.get_session_id(), 1);
         }
 
         #[test]
@@ -609,11 +596,9 @@ mod test {
             let mut packet = PacketV1::read_packet(bytes, flags_version, &context)
                 .expect("Should have succeeded!");
 
-            packet.header.packet_type = PacketType::Ping;
-            packet.header.flags.clear_flags();
-            packet.header.flags.set_flag(PacketFlag::NeedsAck);
-            packet.header.flags.set_flag(PacketFlag::HasSize);
-            packet.header.session_id = 1;
+            packet.set_packet_type(PacketType::Ping);
+            packet.set_flags(PacketFlag::NeedsAck | PacketFlag::HasSize);
+            packet.set_session_id(1);
 
             let result: Vec<u8> = packet.to_bytes(&context);
             let expected_result = vec![

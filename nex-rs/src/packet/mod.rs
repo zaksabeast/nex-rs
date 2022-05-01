@@ -30,7 +30,6 @@ pub trait Packet {
     fn set_packet_type(&mut self, value: PacketType);
 
     fn get_flags(&self) -> PacketFlags;
-    fn get_mut_flags(&mut self) -> &mut PacketFlags;
     fn set_flags(&mut self, value: PacketFlags);
 
     fn get_session_id(&self) -> u8;

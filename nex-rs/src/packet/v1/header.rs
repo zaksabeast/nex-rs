@@ -1,123 +1,157 @@
 use super::packet::PacketV1;
-use crate::packet::{Error, Packet, PacketFlags, PacketResult, PacketType};
-use no_std_io::{EndianRead, EndianWrite};
+use crate::packet::{Packet, PacketFlags, PacketType};
+use no_std_io::{EndianRead, EndianWrite, Error, ReadOutput, Reader, Writer};
 
-#[derive(Debug, Default, EndianRead, EndianWrite)]
-pub struct RawPacketV1Header {
-    pub(super) magic: u16,
-    pub(super) version: u8,
-    pub(super) options_length: u8,
-    pub(super) payload_size: u16,
-    pub(super) source: u8,
-    pub(super) destination: u8,
-    pub(super) type_flags: u16,
-    pub(super) session_id: u8,
-    pub(super) substream_id: u8,
-    pub(super) sequence_id: u16,
-}
+const HEADER_SIZE: usize = 14;
 
-impl RawPacketV1Header {
-    pub fn flags(&self, flags_version: u32) -> PacketFlags {
-        let flags = if flags_version == 0 {
-            self.type_flags >> 0x3
-        } else {
-            self.type_flags >> 0x4
-        };
-
-        PacketFlags::new(flags)
-    }
-
-    pub fn packet_type(&self, flags_version: u32) -> PacketType {
-        let packet_type = if flags_version == 0 {
-            self.type_flags & 0x7
-        } else {
-            self.type_flags & 0xf
-        };
-
-        packet_type.into()
-    }
-
-    pub fn into_header(&self, flags_version: u32) -> PacketResult<PacketV1Header> {
-        if self.magic != 0xd0ea {
-            return Err(Error::InvalidMagic { magic: self.magic });
-        }
-
-        if self.version != PacketV1::VERSION {
-            return Err(Error::InvalidVersion {
-                version: self.version,
-            });
-        }
-
-        let header = PacketV1Header {
-            magic: self.magic,
-            version: self.version,
-            options_length: self.options_length,
-            payload_size: self.payload_size,
-            source: self.source,
-            destination: self.destination,
-            session_id: self.session_id,
-            substream_id: self.substream_id,
-            sequence_id: self.sequence_id,
-            flags: self.flags(flags_version),
-            packet_type: self.packet_type(flags_version),
-        };
-
-        Ok(header)
-    }
-}
-
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct PacketV1Header {
-    pub(super) magic: u16,
-    pub(super) version: u8,
-    pub(super) options_length: u8,
-    pub(super) payload_size: u16,
-    pub(super) source: u8,
-    pub(super) destination: u8,
-    pub(super) packet_type: PacketType,
-    pub(super) flags: PacketFlags,
-    pub(super) session_id: u8,
-    pub(super) substream_id: u8,
-    pub(super) sequence_id: u16,
+    raw: [u8; HEADER_SIZE],
 }
 
 impl PacketV1Header {
-    pub fn into_raw(&self, flags_version: u32) -> RawPacketV1Header {
-        let type_flags: u16 = if flags_version == 0 {
-            u16::from(self.packet_type) | u16::from(self.flags) << 3
-        } else {
-            u16::from(self.packet_type) | u16::from(self.flags) << 4
-        };
+    pub fn new(raw: [u8; HEADER_SIZE]) -> Self {
+        Self { raw }
+    }
 
-        RawPacketV1Header {
-            type_flags,
-            magic: self.magic,
-            version: self.version,
-            options_length: self.options_length,
-            payload_size: self.payload_size,
-            source: self.source,
-            destination: self.destination,
-            session_id: self.session_id,
-            substream_id: self.substream_id,
-            sequence_id: self.sequence_id,
-        }
+    pub fn flags(&self, flags_version: u32) -> PacketFlags {
+        let shift = if flags_version == 0 { 3 } else { 4 };
+        let flags = self.type_flags() >> shift;
+        PacketFlags::new(flags)
+    }
+
+    pub fn set_flags(&mut self, flags_version: u32, value: PacketFlags) {
+        let shift = if flags_version == 0 { 3 } else { 4 };
+        let type_flags = (u16::from(value) << shift) | u16::from(self.packet_type(flags_version));
+        self.set_type_flags(type_flags);
+    }
+
+    pub fn packet_type(&self, flags_version: u32) -> PacketType {
+        let mask = if flags_version == 0 { 0x7 } else { 0xf };
+        let packet_type = self.type_flags() & mask;
+        packet_type.into()
+    }
+
+    pub fn set_packet_type(&mut self, flags_version: u32, value: PacketType) {
+        let mask = if flags_version == 0 { !0x7 } else { !0xf };
+        let type_flags = (self.type_flags() & mask) | u16::from(value);
+        self.set_type_flags(type_flags);
+    }
+
+    pub fn magic(&self) -> u16 {
+        self.raw.default_read_le(0)
+    }
+    pub fn set_magic(&mut self, value: u16) {
+        self.raw.checked_write_le(0, &value);
+    }
+
+    pub fn version(&self) -> u8 {
+        self.raw.default_read_le(2)
+    }
+    pub fn set_version(&mut self, value: u8) {
+        self.raw.checked_write_le(2, &value);
+    }
+
+    pub fn options_length(&self) -> u8 {
+        self.raw.default_read_le(3)
+    }
+    pub fn set_options_length(&mut self, value: u8) {
+        self.raw.checked_write_le(3, &value);
+    }
+
+    pub fn payload_size(&self) -> u16 {
+        self.raw.default_read_le(4)
+    }
+    pub fn set_payload_size(&mut self, value: u16) {
+        self.raw.checked_write_le(4, &value);
+    }
+
+    pub fn source(&self) -> u8 {
+        self.raw.default_read_le(6)
+    }
+    pub fn set_source(&mut self, value: u8) {
+        self.raw.checked_write_le(6, &value);
+    }
+
+    pub fn destination(&self) -> u8 {
+        self.raw.default_read_le(7)
+    }
+    pub fn set_destination(&mut self, value: u8) {
+        self.raw.checked_write_le(7, &value);
+    }
+
+    pub fn type_flags(&self) -> u16 {
+        self.raw.default_read_le(8)
+    }
+    pub fn set_type_flags(&mut self, value: u16) {
+        self.raw.checked_write_le(8, &value);
+    }
+
+    pub fn session_id(&self) -> u8 {
+        self.raw.default_read_le(10)
+    }
+    pub fn set_session_id(&mut self, value: u8) {
+        self.raw.checked_write_le(10, &value);
+    }
+
+    pub fn substream_id(&self) -> u8 {
+        self.raw.default_read_le(11)
+    }
+    pub fn set_substream_id(&mut self, value: u8) {
+        self.raw.checked_write_le(11, &value);
+    }
+
+    pub fn sequence_id(&self) -> u16 {
+        self.raw.default_read_le(12)
+    }
+    pub fn set_sequence_id(&mut self, value: u16) {
+        self.raw.checked_write_le(12, &value);
     }
 }
 
 impl Default for PacketV1Header {
     fn default() -> Self {
-        Self {
-            magic: 0xd0ea,
-            version: PacketV1::VERSION,
-            options_length: 0,
-            payload_size: 0,
-            source: PacketV1::SERVER_ID,
-            destination: PacketV1::CLIENT_ID,
-            packet_type: PacketType::Syn,
-            flags: PacketFlags::new(0),
-            session_id: 0,
-            substream_id: 0,
-            sequence_id: 0,
-        }
+        let mut result = Self {
+            raw: [0; HEADER_SIZE],
+        };
+        result.set_magic(0xd0ea);
+        result.set_version(PacketV1::VERSION);
+        result.set_options_length(0);
+        result.set_payload_size(0);
+        result.set_source(PacketV1::SERVER_ID);
+        result.set_destination(PacketV1::CLIENT_ID);
+        result.set_packet_type(0, PacketType::Syn);
+        result.set_flags(0, PacketFlags::new(0));
+        result.set_session_id(0);
+        result.set_substream_id(0);
+        result.set_sequence_id(0);
+        result
+    }
+}
+
+impl EndianRead for PacketV1Header {
+    fn try_read_le(bytes: &[u8]) -> Result<ReadOutput<Self>, Error> {
+        let raw = bytes.read_byte_vec(0, HEADER_SIZE)?.try_into().unwrap();
+        let result = Self::new(raw);
+        Ok(ReadOutput::new(result, HEADER_SIZE))
+    }
+
+    fn try_read_be(_bytes: &[u8]) -> Result<ReadOutput<Self>, Error> {
+        unimplemented!()
+    }
+}
+
+impl EndianWrite for PacketV1Header {
+    fn get_size(&self) -> usize {
+        HEADER_SIZE
+    }
+
+    fn try_write_le(&self, mut dst: &mut [u8]) -> Result<usize, Error> {
+        dst.write_bytes(0, &self.raw)?;
+        Ok(HEADER_SIZE)
+    }
+
+    fn try_write_be(&self, _dst: &mut [u8]) -> Result<usize, Error> {
+        unimplemented!()
     }
 }

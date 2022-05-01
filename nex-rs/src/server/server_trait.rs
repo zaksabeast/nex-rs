@@ -360,8 +360,10 @@ pub trait Server: EventHandler {
             }
             PacketType::Data => {
                 // Aggregate acknowledgement
-                ack_packet.get_mut_flags().clear_flag(PacketFlag::Ack);
-                ack_packet.get_mut_flags().set_flag(PacketFlag::MultiAck);
+                let mut flags = ack_packet.get_flags();
+                flags.clear_flag(PacketFlag::Ack);
+                flags.set_flag(PacketFlag::MultiAck);
+                ack_packet.set_flags(flags);
 
                 let mut payload_stream = StreamContainer::new(vec![]);
 

@@ -17,6 +17,26 @@ pub struct RawPacketV1Header {
 }
 
 impl RawPacketV1Header {
+    pub fn flags(&self, flags_version: u32) -> PacketFlags {
+        let flags = if flags_version == 0 {
+            self.type_flags >> 0x3
+        } else {
+            self.type_flags >> 0x4
+        };
+
+        PacketFlags::new(flags)
+    }
+
+    pub fn packet_type(&self, flags_version: u32) -> PacketType {
+        let packet_type = if flags_version == 0 {
+            self.type_flags & 0x7
+        } else {
+            self.type_flags & 0xf
+        };
+
+        packet_type.into()
+    }
+
     pub fn into_header(&self, flags_version: u32) -> PacketResult<PacketV1Header> {
         if self.magic != 0xd0ea {
             return Err(Error::InvalidMagic { magic: self.magic });
@@ -26,17 +46,6 @@ impl RawPacketV1Header {
             return Err(Error::InvalidVersion {
                 version: self.version,
             });
-        }
-
-        let packet_type;
-        let flags;
-
-        if flags_version == 0 {
-            packet_type = self.type_flags & 0x7;
-            flags = self.type_flags >> 0x3;
-        } else {
-            packet_type = self.type_flags & 0xf;
-            flags = self.type_flags >> 0x4;
         }
 
         let header = PacketV1Header {
@@ -49,8 +58,8 @@ impl RawPacketV1Header {
             session_id: self.session_id,
             substream_id: self.substream_id,
             sequence_id: self.sequence_id,
-            flags: PacketFlags::new(flags),
-            packet_type: packet_type.into(),
+            flags: self.flags(flags_version),
+            packet_type: self.packet_type(flags_version),
         };
 
         Ok(header)

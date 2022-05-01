@@ -219,9 +219,8 @@ impl PacketV1 {
             });
         }
 
-        let options = stream.default_read_byte_stream(options_length);
-
-        self.decode_options(&options)?;
+        let raw_options = stream.default_read_byte_stream(options_length);
+        self.options = raw_options.default_read_le(0);
 
         let payload_size = usize::from(self.header.payload_size);
         if payload_size > 0 {
@@ -232,7 +231,7 @@ impl PacketV1 {
             &data[2..14].try_into().unwrap(),
             &self.payload,
             context.server_connection_signature(),
-            &options,
+            &raw_options,
             context,
         );
 
@@ -243,45 +242,6 @@ impl PacketV1 {
                 packet_type: self.header.packet_type,
                 sequence_id: self.header.sequence_id,
             });
-        }
-
-        Ok(())
-    }
-
-    pub fn decode_options(&mut self, options: &[u8]) -> PacketResult<()> {
-        let mut options_stream = StreamContainer::new(options);
-        let options_len = options.len();
-
-        let mut i = 0;
-        while i < options_len {
-            let option_type: PacketOption =
-                options_stream.default_read_stream_le::<u8>().try_into()?;
-            let option_size = usize::from(options_stream.default_read_stream_le::<u8>());
-
-            match option_type {
-                PacketOption::SupportedFunctions => {
-                    let lsb = options_stream.default_read_byte_stream(option_size)[0];
-                    // TODO: Set nex version
-                    // Is this something we want clients controlling?
-                    // Should we know this already?
-                    self.options.supported_functions = lsb.into();
-                }
-                PacketOption::ConnectionSignature => {
-                    self.options.connection_signature =
-                        options_stream.default_read_byte_stream(option_size);
-                }
-                PacketOption::FragmentId => {
-                    self.options.fragment_id = options_stream.default_read_stream_le();
-                }
-                PacketOption::InitialSequenceId => {
-                    self.options.initial_sequence_id = options_stream.default_read_stream_le();
-                }
-                PacketOption::MaxSubstreamId => {
-                    self.options.maximum_substream_id = options_stream.default_read_stream_le();
-                }
-            }
-
-            i = options_stream.get_index();
         }
 
         Ok(())

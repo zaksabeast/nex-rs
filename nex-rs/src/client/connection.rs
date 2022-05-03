@@ -30,17 +30,17 @@ impl ClientConnection {
         }
     }
 
-    pub fn encode_packet(&mut self, packet: &mut PacketV1) -> Vec<u8> {
-        self.context.encrypt_packet(packet);
-        packet.to_bytes(self.context.flags_version, &self.context.signature_context)
+    pub fn flags_version(&self) -> u32 {
+        self.context.flags_version
     }
 
-    pub fn read_packet(&mut self, data: Vec<u8>) -> PacketResult<PacketV1> {
-        PacketV1::read_packet(
-            data,
-            self.context.flags_version,
-            &self.context.signature_context,
-        )
+    pub fn encode_packet(&mut self, packet: &mut PacketV1) -> Vec<u8> {
+        self.context.encrypt_packet(packet);
+        packet.to_bytes(&self.context.signature_context)
+    }
+
+    pub fn validate_packet(&mut self, packet: &PacketV1) -> PacketResult<()> {
+        packet.validate(&self.context.signature_context)
     }
 
     pub fn new_data_packet(&self, payload: Vec<u8>) -> PacketV1 {
@@ -51,6 +51,7 @@ impl ClientConnection {
                 .client_connection_signature()
                 .to_vec(),
             payload,
+            self.context.flags_version,
         )
     }
 

@@ -34,6 +34,14 @@ pub enum Error {
         packet_type: PacketType,
         sequence_id: u16,
     },
+    #[snafu(display("Error reading or writing packet: {}", error))]
+    IoError { error: no_std_io::Error },
 }
 
 pub type PacketResult<T> = Result<T, Error>;
+
+impl From<no_std_io::Error> for Error {
+    fn from(error: no_std_io::Error) -> Self {
+        Self::IoError { error }
+    }
+}

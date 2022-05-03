@@ -11,6 +11,23 @@ pub enum PacketOption {
     MaxSubstreamId = 4,
 }
 
+impl PacketOption {
+    pub fn value_size(&self) -> u8 {
+        match self {
+            Self::SupportedFunctions => 4,
+            Self::ConnectionSignature => 16,
+            Self::FragmentId => 1,
+            Self::InitialSequenceId => 2,
+            Self::MaxSubstreamId => 1,
+        }
+    }
+
+    pub fn write_size(&self) -> usize {
+        // option_num + value_size + value
+        1 + 1 + usize::from(self.value_size())
+    }
+}
+
 impl TryFrom<u8> for PacketOption {
     type Error = Error;
 

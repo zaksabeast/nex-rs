@@ -46,6 +46,9 @@ pub trait Server: EventHandler {
     fn get_flags_version(&self) -> u32 {
         self.get_base().settings.flags_version
     }
+    fn set_flags_version(&mut self, flags_version: u32) {
+        self.get_mut_base().settings.flags_version = flags_version;
+    }
 
     fn get_prudp_version(&self) -> u32 {
         self.get_base().settings.prudp_version
@@ -156,6 +159,7 @@ pub trait Server: EventHandler {
             PacketType::Ping => {
                 self.on_ping(client, packet).await?;
             }
+            PacketType::Invalid => {}
         };
 
         Ok(())
@@ -257,7 +261,8 @@ pub trait Server: EventHandler {
         }
         let mut client = client.unwrap().write().await;
 
-        let packet = client.read_packet(message)?;
+        let packet = PacketV1::read_packet(message, self.get_flags_version())?;
+        client.validate_packet(&packet)?;
 
         if self.should_ignore_packet(&mut client, &packet) {
             return Ok(());
@@ -297,7 +302,8 @@ pub trait Server: EventHandler {
     }
 
     async fn send_ping(&self, client: &mut ClientConnection) -> ServerResult<()> {
-        self.send(client, PacketV1::new_ping_packet()).await
+        self.send(client, PacketV1::new_ping_packet(client.flags_version()))
+            .await
     }
 
     fn accept_acknowledge_packet(&self, packet: &PacketV1) -> bool {
@@ -347,19 +353,18 @@ pub trait Server: EventHandler {
             PacketType::Syn => {
                 ack_packet
                     .set_connection_signature(client.get_server_connection_signature().to_vec());
-                ack_packet.set_supported_functions(packet.get_supported_functions());
+                ack_packet.set_supported_functions(packet.flags_version());
                 ack_packet.set_maximum_substream_id(0);
             }
             PacketType::Connect => {
                 ack_packet.set_connection_signature(vec![0; 16]);
-                ack_packet.set_supported_functions(packet.get_supported_functions());
+                ack_packet.set_supported_functions(packet.flags_version());
                 ack_packet.set_initial_sequence_id(10000);
                 ack_packet.set_maximum_substream_id(0);
             }
             PacketType::Data => {
                 // Aggregate acknowledgement
-                ack_packet.get_mut_flags().clear_flag(PacketFlag::Ack);
-                ack_packet.get_mut_flags().set_flag(PacketFlag::MultiAck);
+                ack_packet.set_flags(PacketFlag::MultiAck | PacketFlag::HasSize);
 
                 let mut payload_stream = StreamContainer::new(vec![]);
 
@@ -546,19 +551,23 @@ mod test {
     async fn should_not_deadlock_when_handling_disconnect_message() {
         // Set up client
         let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080);
-        let mut client = ClientConnection::new(addr, ClientContext::default());
+        let access_key = "";
+        let flags_version = 4;
+        let prudp_version = 1;
+        let context = ClientContext::new(flags_version, prudp_version, access_key);
+        let mut client = ClientConnection::new(addr, context);
         client.set_is_connected(true);
 
         // Get server with client
         let server = get_server_with_client(client).await;
 
         // Set up packet
-        let mut disconnect_packet = PacketV1::new_disconnect_packet();
+        let mut disconnect_packet = PacketV1::new_disconnect_packet(flags_version);
         let mut flags = disconnect_packet.get_flags();
         // Prevent ack response from server for test
         flags.clear_flag(PacketFlag::NeedsAck);
         disconnect_packet.set_flags(flags);
-        let packet_bytes = disconnect_packet.to_bytes(4, &SignatureContext::default());
+        let packet_bytes = disconnect_packet.to_bytes(&SignatureContext::new(access_key));
 
         // Handle disconnect
         server

@@ -83,7 +83,7 @@ pub trait Server: EventHandler {
 
                 for (addr, client_lock) in clients.iter() {
                     let mut client = client_lock.write().await;
-                    if client.get_kick_timer() == 0 {
+                    if client.get_kick_timer() == 0 || !client.is_connected() {
                         kick_list.push(*addr);
                     } else {
                         client.decrement_kick_timer(3);
@@ -210,9 +210,9 @@ pub trait Server: EventHandler {
         }
     }
 
-    async fn handle_disconnect(&self, addr: SocketAddr, packet: &PacketV1) {
+    async fn handle_disconnect(&self, client: &mut ClientConnection, packet: &PacketV1) {
         if packet.get_packet_type() == PacketType::Disconnect {
-            self.kick(addr).await;
+            self.kick(client).await;
         }
     }
 
@@ -263,15 +263,13 @@ pub trait Server: EventHandler {
         self.acknowledge_packet(&mut client, &packet).await?;
         self.emit_packet_events(&mut client, &packet).await?;
         self.increment_sequence_id_in(&mut client, &packet);
-        self.handle_disconnect(client.get_address(), &packet).await;
+        self.handle_disconnect(&mut client, &packet).await;
 
         Ok(())
     }
 
-    async fn kick(&self, addr: SocketAddr) {
-        let client_rwlock = self.get_clients();
-        let mut clients = client_rwlock.write().await;
-        clients.remove(&addr);
+    async fn kick(&self, client: &mut ClientConnection) {
+        client.set_is_connected(false);
     }
 
     async fn send_ping(&self, client: &mut ClientConnection) -> ServerResult<()> {
@@ -436,120 +434,5 @@ pub trait Server: EventHandler {
             .send_to(data, client.get_address())
             .await
             .map_err(|_| Error::DataSendError)
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use super::*;
-    use crate::{
-        client::ClientContext, packet::SignatureContext, result::Error as NexError, rmc::RMCRequest,
-    };
-    use std::net::{IpAddr, Ipv4Addr};
-
-    #[derive(Default)]
-    struct TestServer {
-        base: BaseServer,
-    }
-
-    #[async_trait]
-    impl EventHandler for TestServer {
-        async fn on_syn(
-            &self,
-            _client: &mut ClientConnection,
-            _packet: &PacketV1,
-        ) -> NexResult<()> {
-            Ok(())
-        }
-        async fn on_connect(
-            &self,
-            _client: &mut ClientConnection,
-            _packet: &PacketV1,
-        ) -> NexResult<()> {
-            Ok(())
-        }
-        async fn on_data(
-            &self,
-            _client: &mut ClientConnection,
-            _packet: &PacketV1,
-        ) -> NexResult<()> {
-            Ok(())
-        }
-        async fn on_disconnect(
-            &self,
-            _client: &mut ClientConnection,
-            _packet: &PacketV1,
-        ) -> NexResult<()> {
-            Ok(())
-        }
-        async fn on_ping(
-            &self,
-            _client: &mut ClientConnection,
-            _packet: &PacketV1,
-        ) -> NexResult<()> {
-            Ok(())
-        }
-
-        async fn on_rmc_request(
-            &self,
-            _client: &mut ClientConnection,
-            _rmc_request: &RMCRequest,
-        ) -> NexResult<()> {
-            Ok(())
-        }
-        async fn on_error(&self, _error: NexError) {}
-    }
-
-    #[async_trait]
-    impl Server for TestServer {
-        fn get_base(&self) -> &BaseServer {
-            &self.base
-        }
-        fn get_mut_base(&mut self) -> &mut BaseServer {
-            &mut self.base
-        }
-    }
-
-    async fn get_server_with_client(client: ClientConnection) -> TestServer {
-        let server = TestServer::default();
-        let client_rwlock = server.get_clients();
-        let mut clients = client_rwlock.write().await;
-        clients.insert(client.get_address(), RwLock::new(client));
-
-        server
-    }
-
-    #[tokio::test]
-    #[ntest::timeout(5000)]
-    async fn should_not_deadlock_when_handling_disconnect_message() {
-        // Set up client
-        let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080);
-        let access_key = "";
-        let flags_version = 4;
-        let prudp_version = 1;
-        let context = ClientContext::new(flags_version, prudp_version, access_key);
-        let mut client = ClientConnection::new(addr, context);
-        client.set_is_connected(true);
-
-        // Get server with client
-        let server = get_server_with_client(client).await;
-
-        // Set up packet
-        let mut disconnect_packet = PacketV1::new_disconnect_packet(flags_version);
-        let mut flags = disconnect_packet.get_flags();
-        // Prevent ack response from server for test
-        flags.clear_flag(PacketFlag::NeedsAck);
-        disconnect_packet.set_flags(flags);
-        let packet_bytes = disconnect_packet.to_bytes(&SignatureContext::new(access_key));
-
-        // Handle disconnect
-        server
-            .handle_socket_message(packet_bytes, addr)
-            .await
-            .unwrap();
-
-        let client_rwlock = server.get_clients();
-        let clients = client_rwlock.read().await;
-        assert_eq!(clients.len(), 0);
     }
 }

@@ -228,6 +228,7 @@ pub trait Server: EventHandler {
                 RwLock::new(ClientConnection::new(
                     peer,
                     settings.create_client_context(),
+                    settings.ping_timeout,
                 )),
             );
         }

@@ -19,13 +19,13 @@ pub struct ClientConnection {
 }
 
 impl ClientConnection {
-    pub fn new(address: SocketAddr, context: ClientContext) -> Self {
+    pub fn new(address: SocketAddr, context: ClientContext, kick_timer: u32) -> Self {
         Self {
             address,
             session_id: 0,
             pid: 0,
             is_connected: false,
-            kick_timer: 0,
+            kick_timer,
             context,
         }
     }

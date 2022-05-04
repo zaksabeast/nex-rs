@@ -14,7 +14,7 @@ pub struct ClientConnection {
     session_id: u8,
     pid: u32,
     is_connected: bool,
-    kick_timer: Option<u32>,
+    kick_timer: u32,
     context: ClientContext,
 }
 
@@ -25,7 +25,7 @@ impl ClientConnection {
             session_id: 0,
             pid: 0,
             is_connected: false,
-            kick_timer: None,
+            kick_timer: 0,
             context,
         }
     }
@@ -163,12 +163,16 @@ impl ClientConnection {
         self.context.decipher = Rc4::new(rc4_key);
     }
 
-    pub fn get_kick_timer(&self) -> Option<u32> {
+    pub fn get_kick_timer(&self) -> u32 {
         self.kick_timer
     }
 
-    pub fn set_kick_timer(&mut self, seconds: Option<u32>) {
+    pub fn set_kick_timer(&mut self, seconds: u32) {
         self.kick_timer = seconds;
+    }
+
+    pub fn decrement_kick_timer(&mut self, seconds: u32) {
+        self.kick_timer = self.kick_timer.saturating_sub(seconds);
     }
 
     pub fn can_decode_rmc_request(&self, packet: &PacketV1) -> bool {

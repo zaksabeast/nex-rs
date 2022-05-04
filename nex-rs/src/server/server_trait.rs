@@ -73,22 +73,27 @@ pub trait Server: EventHandler {
             loop {
                 invertal.tick().await;
 
-                let mut clients_guard = clients_lock.write().await;
+                // We can't use iterator-like methods since each client has a lock.
+                // We could have a new list and re-add each item, but we'll add almost
+                // every client each time.
+                // A kick list means iterating over a map, then a list, but we'll almost never
+                // iterate over the kick list.
+                let mut kick_list = vec![];
+                let clients = clients_lock.read().await;
 
-                let old_clients = std::mem::take(&mut *clients_guard);
-
-                for (addr, client_lock) in old_clients {
+                for (addr, client_lock) in clients.iter() {
                     let mut client = client_lock.write().await;
-                    if let Some(timer) = client.get_kick_timer() {
-                        if timer != 0 {
-                            client.set_kick_timer(Some(timer.saturating_sub(3)));
-                            drop(client);
-                            clients_guard.insert(addr, client_lock);
-                        }
+                    if client.get_kick_timer() == 0 {
+                        kick_list.push(*addr);
                     } else {
-                        drop(client);
-                        clients_guard.insert(addr, client_lock);
+                        client.decrement_kick_timer(3);
                     }
+                }
+
+                drop(clients);
+                let mut clients = clients_lock.write().await;
+                for kick_addr in kick_list.iter() {
+                    clients.remove(kick_addr);
                 }
             }
         });
@@ -185,7 +190,6 @@ pub trait Server: EventHandler {
             PacketType::Syn => {
                 client.reset();
                 client.set_is_connected(true);
-                client.set_kick_timer(Some(self.get_base().settings.ping_timeout));
 
                 let mut connection_signature = vec![0; 16];
                 rand::thread_rng().fill_bytes(&mut connection_signature);
@@ -239,6 +243,7 @@ pub trait Server: EventHandler {
         }
 
         let mut client = client_lock.unwrap().write().await;
+        client.set_kick_timer(base.settings.ping_timeout);
 
         let packet = PacketV1::read_packet(message, self.get_flags_version())?;
         client.validate_packet(&packet)?;
@@ -246,8 +251,6 @@ pub trait Server: EventHandler {
         if self.should_ignore_packet(&mut client, &packet) {
             return Ok(());
         }
-
-        client.set_kick_timer(Some(base.settings.ping_timeout));
 
         if self.accept_acknowledge_packet(&packet) {
             return Ok(());

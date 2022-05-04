@@ -24,7 +24,7 @@ impl ClientConnection {
             address,
             session_id: 0,
             pid: 0,
-            is_connected: false,
+            is_connected: true,
             kick_timer,
             context,
         }

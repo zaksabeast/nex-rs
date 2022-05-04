@@ -217,35 +217,38 @@ pub trait Server: EventHandler {
     }
 
     async fn handle_socket_message(&self, message: Vec<u8>, peer: SocketAddr) -> NexResult<()> {
-        let base = self.get_base();
         let settings = &self.get_base().settings;
+        let packet = PacketV1::read_packet(message, self.get_flags_version())?;
+        let clients_lock = self.get_clients();
 
-        let client_list_rwlock = self.get_clients();
-
-        let mut clients = client_list_rwlock.read().await;
-
-        let mut client_lock = clients.get(&peer);
-
-        if client_lock.is_none() {
-            drop(clients);
-            {
-                let mut clients = client_list_rwlock.write().await;
-                clients.insert(
+        if packet.get_packet_type() == PacketType::Syn {
+            let mut clients = clients_lock.write().await;
+            clients.insert(
+                peer,
+                RwLock::new(ClientConnection::new(
                     peer,
-                    RwLock::new(ClientConnection::new(
-                        peer,
-                        settings.create_client_context(),
-                    )),
-                );
-            }
-            clients = client_list_rwlock.read().await;
-            client_lock = clients.get(&peer);
+                    settings.create_client_context(),
+                )),
+            );
         }
 
-        let mut client = client_lock.unwrap().write().await;
-        client.set_kick_timer(base.settings.ping_timeout);
+        let clients = clients_lock.read().await;
 
-        let packet = PacketV1::read_packet(message, self.get_flags_version())?;
+        if let Some(client) = clients.get(&peer) {
+            return self.handle_packet(packet, client).await;
+        }
+
+        Ok(())
+    }
+
+    async fn handle_packet(
+        &self,
+        packet: PacketV1,
+        client_lock: &RwLock<ClientConnection>,
+    ) -> NexResult<()> {
+        let base = self.get_base();
+        let mut client = client_lock.write().await;
+        client.set_kick_timer(base.settings.ping_timeout);
         client.validate_packet(&packet)?;
 
         if self.should_ignore_packet(&mut client, &packet) {
@@ -260,9 +263,7 @@ pub trait Server: EventHandler {
         self.acknowledge_packet(&mut client, &packet).await?;
         self.emit_packet_events(&mut client, &packet).await?;
         self.increment_sequence_id_in(&mut client, &packet);
-        drop(client);
-        drop(clients);
-        self.handle_disconnect(peer, &packet).await;
+        self.handle_disconnect(client.get_address(), &packet).await;
 
         Ok(())
     }

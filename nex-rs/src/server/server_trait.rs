@@ -188,9 +188,6 @@ pub trait Server: EventHandler {
     fn handle_connection_init(&self, client: &mut ClientConnection, packet: &PacketV1) {
         match packet.get_packet_type() {
             PacketType::Syn => {
-                client.reset();
-                client.set_is_connected(true);
-
                 let mut connection_signature = vec![0; 16];
                 rand::thread_rng().fill_bytes(&mut connection_signature);
                 client.set_server_connection_signature(connection_signature.clone());

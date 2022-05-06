@@ -1,6 +1,5 @@
 use super::{ClientConnectionResult, ClientContext, Error};
 use crate::{
-    counter::Counter,
     crypto::rc4::Rc4,
     packet::{Packet, PacketResult, PacketV1},
     rmc::{RMCRequest, RMCResponse},
@@ -111,23 +110,6 @@ impl ClientConnection {
 
     pub fn set_is_connected(&mut self, is_connected: bool) {
         self.is_connected = is_connected;
-    }
-
-    pub fn reset(&mut self) {
-        self.context.sequence_id_in = Counter::default();
-        self.context.sequence_id_out = Counter::default();
-
-        self.update_rc4_key(b"CD&ML");
-
-        if self.context.prudp_version == 0 {
-            self.set_client_connection_signature(vec![0; 4]);
-            self.set_server_connection_signature(vec![0; 4]);
-        } else {
-            self.set_client_connection_signature(vec![]);
-            self.set_server_connection_signature(vec![]);
-        }
-
-        self.set_is_connected(false);
     }
 
     pub fn get_address(&self) -> SocketAddr {

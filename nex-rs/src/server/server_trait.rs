@@ -50,10 +50,6 @@ pub trait Server: EventHandler {
         self.get_mut_base().settings.flags_version = flags_version;
     }
 
-    fn get_prudp_version(&self) -> u32 {
-        self.get_base().settings.prudp_version
-    }
-
     fn get_socket(&self) -> ServerResult<&UdpSocket> {
         self.get_base().socket.as_ref().ok_or(Error::NoSocket)
     }

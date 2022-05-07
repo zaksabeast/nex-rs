@@ -15,18 +15,15 @@ pub struct ClientContext {
     pub(super) signature_base: u32,
     pub(super) cipher: Rc4,
     pub(super) decipher: Rc4,
-    #[allow(dead_code)]
-    pub(super) prudp_version: u32,
     pub(super) sequence_id_in: Counter,
     pub(super) sequence_id_out: Counter,
     pub(super) signature_context: SignatureContext,
 }
 
 impl ClientContext {
-    pub fn new(flags_version: u32, prudp_version: u32, access_key: &str) -> Self {
+    pub fn new(flags_version: u32, access_key: &str) -> Self {
         Self {
             flags_version,
-            prudp_version,
             cipher: Rc4::new(b"CD&ML"),
             decipher: Rc4::new(b"CD&ML"),
             signature_context: SignatureContext::new(access_key),
@@ -116,7 +113,6 @@ impl Default for ClientContext {
             cipher: Rc4::new(&[0]),
             decipher: Rc4::new(&[0]),
             flags_version: 1,
-            prudp_version: 1,
             signature_base: 0,
             sequence_id_in: Counter::default(),
             sequence_id_out: Counter::default(),

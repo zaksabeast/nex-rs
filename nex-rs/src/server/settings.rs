@@ -9,8 +9,6 @@ pub struct ServerSettings {
     #[getset(set = "pub")]
     pub(super) nex_version: u32,
     #[getset(set = "pub")]
-    pub(super) prudp_version: u32,
-    #[getset(set = "pub")]
     pub(super) fragment_size: u16,
     pub(super) flags_version: u32,
     #[getset(set = "pub")]
@@ -20,7 +18,7 @@ pub struct ServerSettings {
 
 impl ServerSettings {
     pub fn create_client_context(&self) -> ClientContext {
-        ClientContext::new(self.flags_version, self.prudp_version, &self.access_key)
+        ClientContext::new(self.flags_version, &self.access_key)
     }
 }
 
@@ -29,7 +27,6 @@ impl Default for ServerSettings {
         Self {
             access_key: "".to_string(),
             nex_version: 0,
-            prudp_version: 1,
             fragment_size: 1300,
             ping_timeout: 5,
             flags_version: 1,

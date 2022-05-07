@@ -1,6 +1,5 @@
 use super::{ClientConnectionResult, ClientContext, Error};
 use crate::{
-    counter::Counter,
     crypto::rc4::Rc4,
     packet::{Packet, PacketResult, PacketV1},
     rmc::{RMCRequest, RMCResponse},
@@ -14,18 +13,18 @@ pub struct ClientConnection {
     session_id: u8,
     pid: u32,
     is_connected: bool,
-    kick_timer: Option<u32>,
+    kick_timer: u32,
     context: ClientContext,
 }
 
 impl ClientConnection {
-    pub fn new(address: SocketAddr, context: ClientContext) -> Self {
+    pub fn new(address: SocketAddr, context: ClientContext, kick_timer: u32) -> Self {
         Self {
             address,
             session_id: 0,
             pid: 0,
-            is_connected: false,
-            kick_timer: None,
+            is_connected: true,
+            kick_timer,
             context,
         }
     }
@@ -113,23 +112,6 @@ impl ClientConnection {
         self.is_connected = is_connected;
     }
 
-    pub fn reset(&mut self) {
-        self.context.sequence_id_in = Counter::default();
-        self.context.sequence_id_out = Counter::default();
-
-        self.update_rc4_key(b"CD&ML");
-
-        if self.context.prudp_version == 0 {
-            self.set_client_connection_signature(vec![0; 4]);
-            self.set_server_connection_signature(vec![0; 4]);
-        } else {
-            self.set_client_connection_signature(vec![]);
-            self.set_server_connection_signature(vec![]);
-        }
-
-        self.set_is_connected(false);
-    }
-
     pub fn get_address(&self) -> SocketAddr {
         self.address
     }
@@ -163,12 +145,16 @@ impl ClientConnection {
         self.context.decipher = Rc4::new(rc4_key);
     }
 
-    pub fn get_kick_timer(&self) -> Option<u32> {
+    pub fn get_kick_timer(&self) -> u32 {
         self.kick_timer
     }
 
-    pub fn set_kick_timer(&mut self, seconds: Option<u32>) {
+    pub fn set_kick_timer(&mut self, seconds: u32) {
         self.kick_timer = seconds;
+    }
+
+    pub fn decrement_kick_timer(&mut self, seconds: u32) {
+        self.kick_timer = self.kick_timer.saturating_sub(seconds);
     }
 
     pub fn can_decode_rmc_request(&self, packet: &PacketV1) -> bool {

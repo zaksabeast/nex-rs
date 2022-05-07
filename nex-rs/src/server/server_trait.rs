@@ -1,4 +1,4 @@
-use super::{BaseServer, Error, EventHandler, ServerResult};
+use super::{BaseServer, ClientMap, Error, EventHandler, ServerResult};
 use crate::{
     client::ClientConnection,
     packet::{Packet, PacketFlag, PacketType, PacketV1},
@@ -15,7 +15,7 @@ pub trait Server: EventHandler {
     fn get_base(&self) -> &BaseServer;
     fn get_mut_base(&mut self) -> &mut BaseServer;
 
-    fn get_clients(&self) -> Arc<RwLock<Vec<RwLock<ClientConnection>>>> {
+    fn get_clients(&self) -> Arc<RwLock<ClientMap>> {
         Arc::clone(&self.get_base().clients)
     }
 
@@ -50,10 +50,6 @@ pub trait Server: EventHandler {
         self.get_mut_base().settings.flags_version = flags_version;
     }
 
-    fn get_prudp_version(&self) -> u32 {
-        self.get_base().settings.prudp_version
-    }
-
     fn get_socket(&self) -> ServerResult<&UdpSocket> {
         self.get_base().socket.as_ref().ok_or(Error::NoSocket)
     }
@@ -73,25 +69,27 @@ pub trait Server: EventHandler {
             loop {
                 invertal.tick().await;
 
-                let mut clients_guard = clients_lock.write().await;
+                // We can't use iterator-like methods since each client has a lock.
+                // We could have a new list and re-add each item, but we'll add almost
+                // every client each time.
+                // A kick list means iterating over a map, then a list, but we'll almost never
+                // iterate over the kick list.
+                let mut kick_list = vec![];
+                let clients = clients_lock.read().await;
 
-                let len = clients_guard.len();
-
-                let old_clients = std::mem::replace(&mut *clients_guard, Vec::with_capacity(len));
-
-                for client_lock in old_clients.into_iter() {
+                for (addr, client_lock) in clients.iter() {
                     let mut client = client_lock.write().await;
-                    if let Some(timer) = client.get_kick_timer() {
-                        if timer == 0 {
-                            drop(client);
-                            clients_guard.push(client_lock);
-                        } else {
-                            client.set_kick_timer(Some(timer.saturating_sub(3)));
-                        }
+                    if client.get_kick_timer() == 0 || !client.is_connected() {
+                        kick_list.push(*addr);
                     } else {
-                        drop(client);
-                        clients_guard.push(client_lock);
+                        client.decrement_kick_timer(3);
                     }
+                }
+
+                drop(clients);
+                let mut clients = clients_lock.write().await;
+                for kick_addr in kick_list.iter() {
+                    clients.remove(kick_addr);
                 }
             }
         });
@@ -173,8 +171,9 @@ pub trait Server: EventHandler {
             return true;
         }
 
-        // Ignore packets we've already handled
-        if packet_type != PacketType::Ping && packet.get_sequence_id() < client.get_sequence_id_in()
+        // Ignore packets we're not expecting
+        if packet_type != PacketType::Ping
+            && packet.get_sequence_id() != client.get_sequence_id_in()
         {
             return true;
         }
@@ -185,10 +184,6 @@ pub trait Server: EventHandler {
     fn handle_connection_init(&self, client: &mut ClientConnection, packet: &PacketV1) {
         match packet.get_packet_type() {
             PacketType::Syn => {
-                client.reset();
-                client.set_is_connected(true);
-                client.set_kick_timer(Some(self.get_base().settings.ping_timeout));
-
                 let mut connection_signature = vec![0; 16];
                 rand::thread_rng().fill_bytes(&mut connection_signature);
                 client.set_server_connection_signature(connection_signature.clone());
@@ -208,67 +203,51 @@ pub trait Server: EventHandler {
         }
     }
 
-    async fn handle_disconnect(&self, addr: SocketAddr, packet: &PacketV1) {
+    async fn handle_disconnect(&self, client: &mut ClientConnection, packet: &PacketV1) {
         if packet.get_packet_type() == PacketType::Disconnect {
-            self.kick(addr).await;
+            self.kick(client).await;
         }
-    }
-
-    async fn find_client<'a>(
-        &self,
-        clients: &'a [RwLock<ClientConnection>],
-        addr: SocketAddr,
-    ) -> Option<&'a RwLock<ClientConnection>> {
-        for client in clients.iter() {
-            if client.read().await.get_address() == addr {
-                return Some(client);
-            }
-        }
-        None
-    }
-
-    fn create_client(
-        &self,
-        clients: &mut Vec<RwLock<ClientConnection>>,
-        addr: SocketAddr,
-    ) -> usize {
-        let settings = &self.get_base().settings;
-        let new_client = RwLock::new(ClientConnection::new(
-            addr,
-            settings.create_client_context(),
-        ));
-        clients.push(new_client);
-        clients.len() - 1
     }
 
     async fn handle_socket_message(&self, message: Vec<u8>, peer: SocketAddr) -> NexResult<()> {
-        let base = self.get_base();
-
-        let client_list_rwlock = self.get_clients();
-
-        let mut clients = client_list_rwlock.read().await;
-
-        let mut client = self.find_client(&clients, peer).await;
-
-        if client.is_none() {
-            drop(clients);
-            let index = {
-                let mut clients = client_list_rwlock.write().await;
-                self.create_client(&mut clients, peer)
-            };
-            clients = client_list_rwlock.read().await;
-            client = Some(&clients[index]);
-        }
-        let mut client = client.unwrap().write().await;
-
+        let settings = &self.get_base().settings;
         let packet = PacketV1::read_packet(message, self.get_flags_version())?;
+        let clients_lock = self.get_clients();
+
+        if packet.get_packet_type() == PacketType::Syn {
+            let mut clients = clients_lock.write().await;
+            clients.insert(
+                peer,
+                RwLock::new(ClientConnection::new(
+                    peer,
+                    settings.create_client_context(),
+                    settings.ping_timeout,
+                )),
+            );
+        }
+
+        let clients = clients_lock.read().await;
+
+        if let Some(client) = clients.get(&peer) {
+            return self.handle_packet(packet, client).await;
+        }
+
+        Ok(())
+    }
+
+    async fn handle_packet(
+        &self,
+        packet: PacketV1,
+        client_lock: &RwLock<ClientConnection>,
+    ) -> NexResult<()> {
+        let base = self.get_base();
+        let mut client = client_lock.write().await;
+        client.set_kick_timer(base.settings.ping_timeout);
         client.validate_packet(&packet)?;
 
         if self.should_ignore_packet(&mut client, &packet) {
             return Ok(());
         }
-
-        client.set_kick_timer(Some(base.settings.ping_timeout));
 
         if self.accept_acknowledge_packet(&packet) {
             return Ok(());
@@ -278,27 +257,13 @@ pub trait Server: EventHandler {
         self.acknowledge_packet(&mut client, &packet).await?;
         self.emit_packet_events(&mut client, &packet).await?;
         self.increment_sequence_id_in(&mut client, &packet);
-        drop(client);
-        drop(clients);
-        self.handle_disconnect(peer, &packet).await;
+        self.handle_disconnect(&mut client, &packet).await;
 
         Ok(())
     }
 
-    async fn kick(&self, addr: SocketAddr) {
-        let client_rwlock = self.get_clients();
-        let mut clients = client_rwlock.write().await;
-        let mut client_index = None;
-        for (i, client) in clients.iter().enumerate() {
-            if client.read().await.get_address() == addr {
-                client_index = Some(i);
-                break;
-            }
-        }
-
-        if let Some(index) = client_index {
-            clients.remove(index);
-        }
+    async fn kick(&self, client: &mut ClientConnection) {
+        client.set_is_connected(false);
     }
 
     async fn send_ping(&self, client: &mut ClientConnection) -> ServerResult<()> {
@@ -463,120 +428,5 @@ pub trait Server: EventHandler {
             .send_to(data, client.get_address())
             .await
             .map_err(|_| Error::DataSendError)
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use super::*;
-    use crate::{
-        client::ClientContext, packet::SignatureContext, result::Error as NexError, rmc::RMCRequest,
-    };
-    use std::net::{IpAddr, Ipv4Addr};
-
-    #[derive(Default)]
-    struct TestServer {
-        base: BaseServer,
-    }
-
-    #[async_trait]
-    impl EventHandler for TestServer {
-        async fn on_syn(
-            &self,
-            _client: &mut ClientConnection,
-            _packet: &PacketV1,
-        ) -> NexResult<()> {
-            Ok(())
-        }
-        async fn on_connect(
-            &self,
-            _client: &mut ClientConnection,
-            _packet: &PacketV1,
-        ) -> NexResult<()> {
-            Ok(())
-        }
-        async fn on_data(
-            &self,
-            _client: &mut ClientConnection,
-            _packet: &PacketV1,
-        ) -> NexResult<()> {
-            Ok(())
-        }
-        async fn on_disconnect(
-            &self,
-            _client: &mut ClientConnection,
-            _packet: &PacketV1,
-        ) -> NexResult<()> {
-            Ok(())
-        }
-        async fn on_ping(
-            &self,
-            _client: &mut ClientConnection,
-            _packet: &PacketV1,
-        ) -> NexResult<()> {
-            Ok(())
-        }
-
-        async fn on_rmc_request(
-            &self,
-            _client: &mut ClientConnection,
-            _rmc_request: &RMCRequest,
-        ) -> NexResult<()> {
-            Ok(())
-        }
-        async fn on_error(&self, _error: NexError) {}
-    }
-
-    #[async_trait]
-    impl Server for TestServer {
-        fn get_base(&self) -> &BaseServer {
-            &self.base
-        }
-        fn get_mut_base(&mut self) -> &mut BaseServer {
-            &mut self.base
-        }
-    }
-
-    async fn get_server_with_client(client: ClientConnection) -> TestServer {
-        let server = TestServer::default();
-        let client_rwlock = server.get_clients();
-        let mut clients = client_rwlock.write().await;
-        clients.push(RwLock::new(client));
-
-        server
-    }
-
-    #[tokio::test]
-    #[ntest::timeout(5000)]
-    async fn should_not_deadlock_when_handling_disconnect_message() {
-        // Set up client
-        let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080);
-        let access_key = "";
-        let flags_version = 4;
-        let prudp_version = 1;
-        let context = ClientContext::new(flags_version, prudp_version, access_key);
-        let mut client = ClientConnection::new(addr, context);
-        client.set_is_connected(true);
-
-        // Get server with client
-        let server = get_server_with_client(client).await;
-
-        // Set up packet
-        let mut disconnect_packet = PacketV1::new_disconnect_packet(flags_version);
-        let mut flags = disconnect_packet.get_flags();
-        // Prevent ack response from server for test
-        flags.clear_flag(PacketFlag::NeedsAck);
-        disconnect_packet.set_flags(flags);
-        let packet_bytes = disconnect_packet.to_bytes(&SignatureContext::new(access_key));
-
-        // Handle disconnect
-        server
-            .handle_socket_message(packet_bytes, addr)
-            .await
-            .unwrap();
-
-        let client_rwlock = server.get_clients();
-        let clients = client_rwlock.read().await;
-        assert_eq!(clients.len(), 0);
     }
 }

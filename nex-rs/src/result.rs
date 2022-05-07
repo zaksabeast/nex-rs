@@ -23,6 +23,11 @@ pub enum Error {
         error.to_string()
     ))]
     ServerError { error: server::Error },
+    #[snafu(display(
+        "IO Error: {}",
+        error.to_string()
+    ))]
+    IoError { error: no_std_io::Error },
     #[snafu(display("Error: {}", message))]
     Generic { message: String },
 }
@@ -48,6 +53,12 @@ impl From<client::Error> for Error {
 impl From<server::Error> for Error {
     fn from(error: server::Error) -> Self {
         Self::ServerError { error }
+    }
+}
+
+impl From<no_std_io::Error> for Error {
+    fn from(error: no_std_io::Error) -> Self {
+        Self::IoError { error }
     }
 }
 

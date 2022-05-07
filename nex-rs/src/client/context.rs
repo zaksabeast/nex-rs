@@ -24,8 +24,6 @@ impl ClientContext {
     pub fn new(flags_version: u32, access_key: &str) -> Self {
         Self {
             flags_version,
-            cipher: Rc4::new(b"CD&ML"),
-            decipher: Rc4::new(b"CD&ML"),
             signature_context: SignatureContext::new(access_key),
             ..Default::default()
         }
@@ -110,8 +108,8 @@ impl ClientContext {
 impl Default for ClientContext {
     fn default() -> Self {
         Self {
-            cipher: Rc4::new(&[0]),
-            decipher: Rc4::new(&[0]),
+            cipher: Rc4::new(b"CD&ML"),
+            decipher: Rc4::new(b"CD&ML"),
             flags_version: 1,
             signature_base: 0,
             sequence_id_in: Counter::default(),

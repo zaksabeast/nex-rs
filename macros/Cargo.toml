@@ -1,0 +1,20 @@
+[package]
+name = "macros"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+proc_macro = true
+
+[dependencies]
+proc-macro2 = "1.0"
+quote = "1.0"
+syn = { version = "1.0", features = ["full", "extra-traits"] }
+heck = "0.4.0"
+
+[dev-dependencies]
+async-trait = "0.1.52"
+no_std_io = { git = "https://github.com/zaksabeast/no_std_io.git", rev = "4a9ca86" }
+nex-protocols-rs = { path = "../nex-protocols-rs" }
+nex-rs = { path = "../nex-rs" }
+tokio = { version = "1", features = ["full"] }

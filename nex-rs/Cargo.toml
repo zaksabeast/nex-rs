@@ -12,6 +12,7 @@ ntest = "0.7.5"
 async-trait = "0.1.52"
 getset = "0.1.2"
 hmac = "0.12.1"
+macros = { path = "../macros" }
 md-5 = "0.10.1"
 miniz_oxide = "0.5.1"
 no_std_io = { git = "https://github.com/zaksabeast/no_std_io.git", rev = "4a9ca86" }

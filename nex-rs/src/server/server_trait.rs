@@ -2,7 +2,6 @@ use super::{BaseServer, ClientMap, Error, EventHandler, ServerResult};
 use crate::{
     client::ClientConnection,
     packet::{Packet, PacketFlag, PacketType, PacketV1},
-    result::NexResult,
 };
 use async_trait::async_trait;
 use no_std_io::{StreamContainer, StreamWriter};
@@ -111,7 +110,7 @@ pub trait Server: EventHandler {
             let clone = Arc::clone(&server);
             tokio::spawn(async move {
                 if let Err(error) = clone.handle_socket_message(buf, peer).await {
-                    clone.on_error(error).await;
+                    clone.on_error(error.into()).await;
                 }
             });
         }
@@ -135,7 +134,7 @@ pub trait Server: EventHandler {
         &self,
         client: &mut ClientConnection,
         packet: &PacketV1,
-    ) -> NexResult<()> {
+    ) -> ServerResult<()> {
         match packet.get_packet_type() {
             PacketType::Syn => {
                 self.on_syn(client, packet).await?;
@@ -209,7 +208,7 @@ pub trait Server: EventHandler {
         }
     }
 
-    async fn handle_socket_message(&self, message: Vec<u8>, peer: SocketAddr) -> NexResult<()> {
+    async fn handle_socket_message(&self, message: Vec<u8>, peer: SocketAddr) -> ServerResult<()> {
         let settings = &self.get_base().settings;
         let packet = PacketV1::read_packet(message, self.get_flags_version())?;
         let clients_lock = self.get_clients();
@@ -239,7 +238,7 @@ pub trait Server: EventHandler {
         &self,
         packet: PacketV1,
         client_lock: &RwLock<ClientConnection>,
-    ) -> NexResult<()> {
+    ) -> ServerResult<()> {
         let base = self.get_base();
         let mut client = client_lock.write().await;
         client.set_kick_timer(base.settings.ping_timeout);
@@ -285,7 +284,7 @@ pub trait Server: EventHandler {
         &self,
         client: &mut ClientConnection,
         packet: &PacketV1,
-    ) -> NexResult<()> {
+    ) -> ServerResult<()> {
         let packet_type = packet.get_packet_type();
         let flags = packet.get_flags();
         let payload = packet.get_payload();
@@ -305,7 +304,7 @@ pub trait Server: EventHandler {
         packet: &PacketV1,
         client: &mut ClientConnection,
         payload: Option<Vec<u8>>,
-    ) -> NexResult<()> {
+    ) -> ServerResult<()> {
         let mut ack_packet = packet.new_ack_packet();
 
         if let Some(payload) = payload {

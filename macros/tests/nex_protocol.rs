@@ -3,7 +3,7 @@ use nex_rs::{
     client::{ClientConnection, ClientContext},
     nex_types::ResultCode,
     packet::PacketV1,
-    result::{Error, NexResult},
+    result::Error,
     rmc::RMCRequest,
     server::{BaseServer, EventHandler, Server, ServerResult},
 };
@@ -39,34 +39,42 @@ struct MockServer {
 
 #[async_trait::async_trait]
 impl EventHandler for MockServer {
-    async fn on_syn(&self, _client: &mut ClientConnection, _packet: &PacketV1) -> NexResult<()> {
+    async fn on_syn(&self, _client: &mut ClientConnection, _packet: &PacketV1) -> ServerResult<()> {
         Ok(())
     }
     async fn on_connect(
         &self,
         _client: &mut ClientConnection,
         _packet: &PacketV1,
-    ) -> NexResult<()> {
+    ) -> ServerResult<()> {
         Ok(())
     }
-    async fn on_data(&self, _client: &mut ClientConnection, _packet: &PacketV1) -> NexResult<()> {
+    async fn on_data(
+        &self,
+        _client: &mut ClientConnection,
+        _packet: &PacketV1,
+    ) -> ServerResult<()> {
         Ok(())
     }
     async fn on_disconnect(
         &self,
         _client: &mut ClientConnection,
         _packet: &PacketV1,
-    ) -> NexResult<()> {
+    ) -> ServerResult<()> {
         Ok(())
     }
-    async fn on_ping(&self, _client: &mut ClientConnection, _packet: &PacketV1) -> NexResult<()> {
+    async fn on_ping(
+        &self,
+        _client: &mut ClientConnection,
+        _packet: &PacketV1,
+    ) -> ServerResult<()> {
         Ok(())
     }
     async fn on_rmc_request(
         &self,
         _client: &mut ClientConnection,
         _rmc_request: &RMCRequest,
-    ) -> NexResult<()> {
+    ) -> ServerResult<()> {
         Ok(())
     }
     async fn on_error(&self, _error: Error) {}

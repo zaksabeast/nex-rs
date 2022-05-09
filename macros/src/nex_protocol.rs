@@ -52,7 +52,7 @@ fn create_variant_method(variant: &Variant) -> Option<proc_macro2::TokenStream> 
             &self,
             client: &mut nex_rs::client::ClientConnection,
             request: &nex_rs::rmc::RMCRequest,
-        ) -> nex_rs::result::NexResult<()> {
+        ) -> nex_rs::server::ServerResult<()> {
             let parameters = request.parameters.as_slice();
             let mut parameters_stream = no_std_io::StreamContainer::new(parameters);
 

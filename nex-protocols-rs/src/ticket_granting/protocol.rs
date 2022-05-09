@@ -1,268 +1,123 @@
-use super::types::AuthenticationInfo;
-use async_trait::async_trait;
 use nex_rs::{
-    client::ClientConnection,
-    nex_types::{DataHolder, NexString, ResultCode},
-    result::NexResult,
-    rmc::RMCRequest,
-    server::Server,
+    macros::NexProtocol,
+    nex_types::{DataHolder, DateTime, NexBuffer, NexList, NexString, NexStruct, ResultCode},
 };
-use no_std_io::{StreamContainer, StreamReader};
+use no_std_io::{EndianRead, EndianWrite};
+use num_enum::{IntoPrimitive, TryFromPrimitive};
 
 pub const AUTHENTICATION_PROTOCOL_ID: u8 = 0xA;
 
-#[async_trait]
-pub trait TicketGrantingProtocol: Server {
-    async fn login(
-        &self,
-        client: &mut ClientConnection,
-        username: String,
-    ) -> Result<Vec<u8>, ResultCode>;
-    async fn login_ex(
-        &self,
-        client: &mut ClientConnection,
-        username: String,
-        ticket_granting_info: AuthenticationInfo,
-    ) -> Result<Vec<u8>, ResultCode>;
-    async fn request_ticket(
-        &self,
-        client: &mut ClientConnection,
-        user_pid: u32,
-        server_pid: u32,
-    ) -> Result<Vec<u8>, ResultCode>;
-    async fn get_pid(
-        &self,
-        client: &mut ClientConnection,
-        username: String,
-    ) -> Result<Vec<u8>, ResultCode>;
-    async fn get_name(
-        &self,
-        client: &mut ClientConnection,
-        user_pid: u32,
-    ) -> Result<Vec<u8>, ResultCode>;
-    async fn login_with_param(&self, client: &mut ClientConnection) -> Result<Vec<u8>, ResultCode>;
+#[derive(Debug, Clone, Copy, PartialEq, TryFromPrimitive, IntoPrimitive, NexProtocol)]
+#[repr(u32)]
+pub enum TicketGrantingMethod {
+    #[protocol_method(input = "LoginInput", output = "LoginOutput")]
+    Login = 0x1,
+    #[protocol_method(input = "LoginExInput", output = "LoginExOutput")]
+    LoginEx = 0x2,
+    #[protocol_method(input = "RequestTicketInput", output = "RequestTicketOutput")]
+    RequestTicket = 0x3,
+    #[protocol_method(input = "GetPIDInput", output = "GetPIDOutput")]
+    GetPID = 0x4,
+    #[protocol_method(input = "GetNameInput", output = "GetNameOutput")]
+    GetName = 0x5,
+    #[protocol_method(input = "LoginWithContextInput", output = "LoginWithContextOutput")]
+    LoginWithContext = 0x6,
+}
 
-    async fn handle_login(
-        &self,
-        client: &mut ClientConnection,
-        request: &RMCRequest,
-    ) -> NexResult<()> {
-        let parameters = request.parameters.as_slice();
-        let mut parameters_stream = StreamContainer::new(parameters);
+#[derive(Debug, EndianRead, EndianWrite)]
+pub struct AuthenticationInfo {
+    pub token: NexString,
+    pub ngs_version: u32,
+    pub token_type: u8,
+    pub server_version: u32,
+}
 
-        let username: String = parameters_stream
-            .read_stream_le::<NexString>()
-            .map_err(|_| "Can not read username")?
-            .into();
+#[derive(EndianRead, EndianWrite)]
+pub struct LoginInput {
+    pub username: NexString,
+}
 
-        if username.trim().is_empty() {
-            return Err("Failed to read username".into());
-        }
+#[derive(EndianRead, EndianWrite)]
+pub struct LoginOutput {
+    pub result: ResultCode,
+    pub pid: u32,
+    pub kerberos_ticket: NexBuffer,
+    pub connection_data: RVConnectionData,
+    pub branch: NexString,
+}
 
-        match self.login(client, username).await {
-            Ok(data) => {
-                self.send_success(
-                    client,
-                    request.protocol_id,
-                    request.method_id,
-                    request.call_id,
-                    data,
-                )
-                .await?
-            }
-            Err(error_code) => {
-                self.send_error(
-                    client,
-                    request.protocol_id,
-                    request.method_id,
-                    request.call_id,
-                    error_code.into(),
-                )
-                .await?
-            }
-        }
-        Ok(())
-    }
+#[derive(EndianRead, EndianWrite)]
+pub struct LoginExInput {
+    pub username: NexString,
+    pub auth_info: DataHolder<AuthenticationInfo>,
+}
 
-    async fn handle_login_ex(
-        &self,
-        client: &mut ClientConnection,
-        request: &RMCRequest,
-    ) -> NexResult<()> {
-        let parameters = request.parameters.as_slice();
-        let mut parameters_stream = StreamContainer::new(parameters);
+#[derive(EndianRead, EndianWrite)]
+pub struct LoginExOutput {
+    pub result: ResultCode,
+    pub pid: u32,
+    pub kerberos_ticket: NexBuffer,
+    pub connection_data: NexStruct<RVConnectionData>,
+    pub branch: NexString,
+}
 
-        let username: String = parameters_stream
-            .read_stream_le::<NexString>()
-            .map_err(|_| "Can not read username")?
-            .into();
+#[derive(EndianRead, EndianWrite)]
+pub struct RequestTicketInput {
+    pub user_pid: u32,
+    pub server_pid: u32,
+}
 
-        if username.trim().is_empty() {
-            return Err("Failed to read username".into());
-        }
+#[derive(EndianRead, EndianWrite)]
+pub struct RequestTicketOutput {
+    pub result: ResultCode,
+    pub kerberos_ticket: NexBuffer,
+}
 
-        let data_holder = parameters_stream
-            .read_stream_le::<DataHolder<AuthenticationInfo>>()
-            .map_err(|_| "Can not read data holder")?;
+#[derive(EndianRead, EndianWrite)]
+pub struct GetPIDInput {
+    pub username: NexString,
+}
 
-        let data_holder_name: String = data_holder.get_name().into();
+#[derive(EndianRead, EndianWrite)]
+pub struct GetPIDOutput {
+    pub id: u32,
+}
 
-        if data_holder_name != "AuthenticationInfo" {
-            return Err("Data holder name mismatch".into());
-        }
+#[derive(EndianRead, EndianWrite)]
+pub struct GetNameInput {
+    pub id: u32,
+}
 
-        match self
-            .login_ex(client, username, data_holder.into_object())
-            .await
-        {
-            Ok(data) => {
-                self.send_success(
-                    client,
-                    request.protocol_id,
-                    request.method_id,
-                    request.call_id,
-                    data,
-                )
-                .await?
-            }
-            Err(error_code) => {
-                self.send_error(
-                    client,
-                    request.protocol_id,
-                    request.method_id,
-                    request.call_id,
-                    error_code.into(),
-                )
-                .await?
-            }
-        }
-        Ok(())
-    }
+#[derive(EndianRead, EndianWrite)]
+pub struct GetNameOutput {
+    pub name: NexString,
+}
 
-    async fn handle_request_ticket(
-        &self,
-        client: &mut ClientConnection,
-        request: &RMCRequest,
-    ) -> NexResult<()> {
-        let parameters = request.parameters.as_slice();
-        if parameters.len() != 8 {
-            return Err("[TicketGrantingProtocol::request_ticket] Parameters length not 8".into());
-        }
+#[derive(EndianRead, EndianWrite)]
+pub struct LoginWithContextInput {
+    pub login_data: DataHolder<AuthenticationInfo>,
+}
 
-        let mut parameters_stream = StreamContainer::new(parameters);
+#[derive(EndianRead, EndianWrite)]
+pub struct LoginWithContextOutput {
+    pub result: ResultCode,
+    pub pid: u32,
+    pub kerberos_ticket: NexBuffer,
+    pub connection_data: RVConnectionData,
+}
 
-        let user_pid: u32 = parameters_stream
-            .read_stream_le()
-            .map_err(|_| "[TicketGrantingProtocol::request_ticket] Failed to read user pid")?;
-        let server_pid: u32 = parameters_stream
-            .read_stream_le()
-            .map_err(|_| "[TicketGrantingProtocol::request_ticket] Failed to read server pid")?;
+#[derive(EndianRead, EndianWrite)]
+pub struct RVConnectionData {
+    pub regular_protocols_url: NexString,
+    pub special_protocols_list: NexList<u8>,
+    pub special_protocols_url: NexString,
+    pub current_time: DateTime,
+}
 
-        match self.request_ticket(client, user_pid, server_pid).await {
-            Ok(data) => {
-                self.send_success(
-                    client,
-                    request.protocol_id,
-                    request.method_id,
-                    request.call_id,
-                    data,
-                )
-                .await?
-            }
-            Err(error_code) => {
-                self.send_error(
-                    client,
-                    request.protocol_id,
-                    request.method_id,
-                    request.call_id,
-                    error_code.into(),
-                )
-                .await?
-            }
-        }
-        Ok(())
-    }
-
-    async fn handle_get_pid(
-        &self,
-        client: &mut ClientConnection,
-        request: &RMCRequest,
-    ) -> NexResult<()> {
-        let parameters = request.parameters.as_slice();
-        let mut parameters_stream = StreamContainer::new(parameters);
-        let username: String = parameters_stream
-            .read_stream_le::<NexString>()
-            .map_err(|_| "Can not read username")?
-            .into();
-
-        if username.trim().is_empty() {
-            return Err("[TicketGrantingProtocol::get_pid] Failed to read username".into());
-        }
-
-        match self.get_pid(client, username).await {
-            Ok(data) => {
-                self.send_success(
-                    client,
-                    request.protocol_id,
-                    request.method_id,
-                    request.call_id,
-                    data,
-                )
-                .await?
-            }
-            Err(error_code) => {
-                self.send_error(
-                    client,
-                    request.protocol_id,
-                    request.method_id,
-                    request.call_id,
-                    error_code.into(),
-                )
-                .await?
-            }
-        }
-        Ok(())
-    }
-
-    async fn handle_get_name(
-        &self,
-        client: &mut ClientConnection,
-        request: &RMCRequest,
-    ) -> NexResult<()> {
-        let parameters = request.parameters.as_slice();
-
-        if parameters.len() != 4 {
-            return Err("[TicketGrantingProtocol::get_name] Parameters length not 4".into());
-        }
-
-        let mut parameters_stream = StreamContainer::new(parameters);
-
-        let user_pid: u32 = parameters_stream
-            .read_stream_le()
-            .map_err(|_| "[TicketGrantingProtocol::get_name] Failed to read user PID")?;
-
-        match self.get_name(client, user_pid).await {
-            Ok(data) => {
-                self.send_success(
-                    client,
-                    request.protocol_id,
-                    request.method_id,
-                    request.call_id,
-                    data,
-                )
-                .await?
-            }
-            Err(error_code) => {
-                self.send_error(
-                    client,
-                    request.protocol_id,
-                    request.method_id,
-                    request.call_id,
-                    error_code.into(),
-                )
-                .await?
-            }
-        }
-        Ok(())
-    }
+#[derive(EndianRead, EndianWrite)]
+pub struct LoginData {
+    pub principal_type: i8,
+    pub username: NexString,
+    pub context: u64,
+    pub similar_connection: u32,
 }

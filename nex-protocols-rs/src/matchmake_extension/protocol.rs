@@ -1,292 +1,120 @@
-use crate::matchmake_extension::MatchmakeSessionSearchCriteria;
-use async_trait::async_trait;
 use nex_rs::{
-    client::ClientConnection,
-    nex_types::{ResultCode, ResultRange},
-    result::NexResult,
-    rmc::RMCRequest,
-    server::Server,
+    macros::NexProtocol,
+    nex_types::{NexBuffer, NexList, NexMap, NexString, NexStruct, NexVariant, ResultRange},
 };
-use no_std_io::{StreamContainer, StreamReader};
+use no_std_io::{EndianRead, EndianWrite};
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 
 pub const MATCHMAKE_EXTENSION_PROTOCOL_ID: u8 = 0x6D;
 
-#[derive(Debug, Clone, Copy, PartialEq, TryFromPrimitive, IntoPrimitive)]
+#[derive(Debug, Clone, Copy, PartialEq, TryFromPrimitive, IntoPrimitive, NexProtocol)]
 #[repr(u32)]
 pub enum MatchmakeExtensionMethod {
+    #[protocol_method(input = "CloseParticipationInput")]
     CloseParticipation = 0x1,
+    #[protocol_method(input = "OpenParticipationInput")]
     OpenParticipation = 0x2,
+    #[protocol_method(
+        input = "BrowseMatchmakeSessionInput",
+        output = "BrowseMatchmakeSessionOutput"
+    )]
     BrowseMatchmakeSession = 0x4,
+    #[protocol_method(
+        input = "BrowseMatchmakeSessionWithHostUrlsInput",
+        output = "BrowseMatchmakeSessionWithHostUrlsOutput"
+    )]
     BrowseMatchmakeSessionWithHostUrls = 0x5,
+    #[protocol_method(output = "GetAttractionStatusOutput")]
     GetAttractionStatus = 0x31,
+    #[protocol_method(input = "SimpleMatchmakeInput", output = "SimpleMatchmakeOutput")]
     SimpleMatchmake = 0x33,
 }
 
-#[async_trait]
-pub trait MatchmakeExtensionProtocol: Server {
-    async fn close_participation(
-        &self,
-        client: &mut ClientConnection,
-        gid: u32,
-    ) -> Result<Vec<u8>, ResultCode>;
-    async fn open_participation(
-        &self,
-        client: &mut ClientConnection,
-        gid: u32,
-    ) -> Result<Vec<u8>, ResultCode>;
-    async fn browse_matchmake_session(
-        &self,
-        client: &mut ClientConnection,
-        matchmake_session_search_criteria: MatchmakeSessionSearchCriteria,
-        result_range: ResultRange,
-    ) -> Result<Vec<u8>, ResultCode>;
-    async fn browse_matchmake_session_with_host_urls(
-        &self,
-        client: &mut ClientConnection,
-        matchmake_session_search_criteria: MatchmakeSessionSearchCriteria,
-        result_range: ResultRange,
-    ) -> Result<Vec<u8>, ResultCode>;
-    async fn get_attraction_status(
-        &self,
-        client: &mut ClientConnection,
-    ) -> Result<Vec<u8>, ResultCode>;
-    async fn simple_matchmake(
-        &self,
-        client: &mut ClientConnection,
-        group_id: u32,
-    ) -> Result<Vec<u8>, ResultCode>;
+#[derive(EndianRead, EndianWrite)]
+pub struct CloseParticipationInput {
+    pub gid: u32,
+}
 
-    async fn handle_close_participation(
-        &self,
-        client: &mut ClientConnection,
-        request: &RMCRequest,
-    ) -> NexResult<()> {
-        let parameters = request.parameters.as_slice();
-        let mut parameters_stream = StreamContainer::new(parameters);
+#[derive(EndianRead, EndianWrite)]
+pub struct OpenParticipationInput {
+    pub gid: u32,
+}
 
-        let gid = parameters_stream
-            .read_stream_le::<u32>()
-            .map_err(|_| "Can not read group id")?;
+#[derive(EndianRead, EndianWrite)]
+pub struct MatchmakeParam {
+    pub parameters: NexMap<NexString, NexVariant>,
+}
 
-        match self.close_participation(client, gid).await {
-            Ok(data) => {
-                self.send_success(
-                    client,
-                    request.protocol_id,
-                    request.method_id,
-                    request.call_id,
-                    data,
-                )
-                .await?
-            }
-            Err(error_code) => {
-                self.send_error(
-                    client,
-                    request.protocol_id,
-                    request.method_id,
-                    request.call_id,
-                    error_code.into(),
-                )
-                .await?
-            }
-        }
-        Ok(())
-    }
+#[derive(EndianRead, EndianWrite)]
+pub struct MatchmakeSessionSearchCriteria {
+    pub attributes: NexList<NexString>,
+    pub game_mode: NexString,
+    pub min_participants: NexString,
+    pub max_participants: NexString,
+    pub matchmake_system_type: NexString,
+    pub vacant_only: bool,
+    pub exclude_locked: bool,
+    pub exclude_non_host_pid: bool,
+    pub selection_method: u32,
+    pub vacant_participants: u32,
+    pub matchmake_param: MatchmakeParam,
+    pub exclude_user_password_set: bool,
+    pub exclude_system_password_set: bool,
+    pub refer_gid: u32,
+}
 
-    async fn handle_open_participation(
-        &self,
-        client: &mut ClientConnection,
-        request: &RMCRequest,
-    ) -> NexResult<()> {
-        let parameters = request.parameters.as_slice();
-        let mut parameters_stream = StreamContainer::new(parameters);
+#[derive(EndianRead, EndianWrite)]
+pub struct BrowseMatchmakeSessionInput {
+    pub search_criteria: MatchmakeSessionSearchCriteria,
+    pub result_range: ResultRange,
+}
 
-        let gid = parameters_stream
-            .read_stream_le::<u32>()
-            .map_err(|_| "Can not read group id")?;
+#[derive(EndianRead, EndianWrite)]
+pub struct BrowseMatchmakeSessionOutput {
+    pub gathering: NexList<u8>,
+}
 
-        match self.open_participation(client, gid).await {
-            Ok(data) => {
-                self.send_success(
-                    client,
-                    request.protocol_id,
-                    request.method_id,
-                    request.call_id,
-                    data,
-                )
-                .await?
-            }
-            Err(error_code) => {
-                self.send_error(
-                    client,
-                    request.protocol_id,
-                    request.method_id,
-                    request.call_id,
-                    error_code.into(),
-                )
-                .await?
-            }
-        }
-        Ok(())
-    }
+#[derive(EndianRead, EndianWrite)]
+pub struct BrowseMatchmakeSessionWithHostUrlsInput {
+    pub search_criteria: MatchmakeSessionSearchCriteria,
+    pub result_range: ResultRange,
+}
 
-    async fn handle_browse_matchmake_session(
-        &self,
-        client: &mut ClientConnection,
-        request: &RMCRequest,
-    ) -> NexResult<()> {
-        let parameters = request.parameters.as_slice();
-        let mut parameters_stream = StreamContainer::new(parameters);
+#[derive(EndianRead, EndianWrite)]
+pub struct BrowseMatchmakeSessionWithHostUrlsOutput {
+    pub gathering: NexList<u8>,
+    pub gathering_urls: NexList<NexString>,
+}
 
-        let matchmake_session_search_criteria = parameters_stream
-            .read_stream_le::<MatchmakeSessionSearchCriteria>()
-            .map_err(|_| "Can not read matchmake session search criteria")?;
+#[derive(EndianRead, EndianWrite)]
+pub struct AttractionStatus {
+    pub message_interval: u16,
+    pub operation_flag: u8,
+    pub active_player_invite_param: u16,
+    pub active_player_join_param: u16,
+    pub extra_params: NexList<u32>,
+}
 
-        let result_range = parameters_stream
-            .read_stream_le::<ResultRange>()
-            .map_err(|_| "Can not read result range")?;
+#[derive(EndianRead, EndianWrite)]
+pub struct GetAttractionStatusOutput {
+    pub attraction_status: NexStruct<AttractionStatus>,
+    pub refresh_interval: u16,
+}
 
-        match self
-            .browse_matchmake_session(client, matchmake_session_search_criteria, result_range)
-            .await
-        {
-            Ok(data) => {
-                self.send_success(
-                    client,
-                    request.protocol_id,
-                    request.method_id,
-                    request.call_id,
-                    data,
-                )
-                .await?
-            }
-            Err(error_code) => {
-                self.send_error(
-                    client,
-                    request.protocol_id,
-                    request.method_id,
-                    request.call_id,
-                    error_code.into(),
-                )
-                .await?
-            }
-        }
-        Ok(())
-    }
+#[derive(EndianRead, EndianWrite)]
+pub struct SimpleMatchmakeInput {
+    pub group_id: u32,
+}
 
-    async fn handle_browse_matchmake_session_with_host_urls(
-        &self,
-        client: &mut ClientConnection,
-        request: &RMCRequest,
-    ) -> NexResult<()> {
-        let parameters = request.parameters.as_slice();
-        let mut parameters_stream = StreamContainer::new(parameters);
+#[derive(EndianRead, EndianWrite)]
+pub struct SimpleMatchmakeOutput {
+    pub found: bool,
+    pub info: SimpleMatchmakeHostInfo,
+}
 
-        let matchmake_session_search_criteria = parameters_stream
-            .read_stream_le::<MatchmakeSessionSearchCriteria>()
-            .map_err(|_| "Can not read matchmake session search criteria")?;
-
-        let result_range = parameters_stream
-            .read_stream_le::<ResultRange>()
-            .map_err(|_| "Can not read result range")?;
-
-        match self
-            .browse_matchmake_session_with_host_urls(
-                client,
-                matchmake_session_search_criteria,
-                result_range,
-            )
-            .await
-        {
-            Ok(data) => {
-                self.send_success(
-                    client,
-                    request.protocol_id,
-                    request.method_id,
-                    request.call_id,
-                    data,
-                )
-                .await?
-            }
-            Err(error_code) => {
-                self.send_error(
-                    client,
-                    request.protocol_id,
-                    request.method_id,
-                    request.call_id,
-                    error_code.into(),
-                )
-                .await?
-            }
-        }
-        Ok(())
-    }
-
-    async fn handle_get_attraction_status(
-        &self,
-        client: &mut ClientConnection,
-        request: &RMCRequest,
-    ) -> NexResult<()> {
-        match self.get_attraction_status(client).await {
-            Ok(data) => {
-                self.send_success(
-                    client,
-                    request.protocol_id,
-                    request.method_id,
-                    request.call_id,
-                    data,
-                )
-                .await?
-            }
-            Err(error_code) => {
-                self.send_error(
-                    client,
-                    request.protocol_id,
-                    request.method_id,
-                    request.call_id,
-                    error_code.into(),
-                )
-                .await?
-            }
-        }
-        Ok(())
-    }
-
-    async fn handle_simple_matchmake(
-        &self,
-        client: &mut ClientConnection,
-        request: &RMCRequest,
-    ) -> NexResult<()> {
-        let parameters = request.parameters.as_slice();
-        let mut parameters_stream = StreamContainer::new(parameters);
-
-        let group_id = parameters_stream
-            .read_stream_le::<u32>()
-            .map_err(|_| "Can not read group id")?;
-
-        match self.simple_matchmake(client, group_id).await {
-            Ok(data) => {
-                self.send_success(
-                    client,
-                    request.protocol_id,
-                    request.method_id,
-                    request.call_id,
-                    data,
-                )
-                .await?
-            }
-            Err(error_code) => {
-                self.send_error(
-                    client,
-                    request.protocol_id,
-                    request.method_id,
-                    request.call_id,
-                    error_code.into(),
-                )
-                .await?
-            }
-        }
-        Ok(())
-    }
+#[derive(EndianRead, EndianWrite)]
+pub struct SimpleMatchmakeHostInfo {
+    pub pid: u32,
+    pub session_key: NexBuffer,
+    pub station_urls: NexList<NexString>,
 }

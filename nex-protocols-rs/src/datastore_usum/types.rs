@@ -4,26 +4,26 @@ use nex_rs::nex_types::{
 use no_std_io::{EndianRead, EndianWrite};
 
 #[derive(Debug, EndianRead, EndianWrite)]
-pub struct GetMetasRequest {
+pub struct GetMetasInput {
     pub data_ids: NexList<u64>,
     pub param: NexStruct<DataStoreGetMetaParam>,
 }
 
 #[derive(Debug, EndianRead, EndianWrite)]
-pub struct GetMetasResponse {
+pub struct GetMetasOutput {
     pub p_meta_info: NexList<NexStruct<DataStoreMetaInfo>>,
     pub p_results: NexList<NexStruct<ResultCode>>,
 }
 
 #[derive(Debug, EndianRead, EndianWrite)]
-pub struct RateObjectRequest {
+pub struct RateObjectInput {
     pub target: NexStruct<DataStoreRatingTarget>,
     pub param: NexStruct<DataStoreRateObjectParam>,
     pub fetch_ratings: bool,
 }
 
 #[derive(Debug, EndianRead, EndianWrite)]
-pub struct RateObjectResponse {
+pub struct RateObjectOutput {
     pub p_rating: NexStruct<DataStoreRatingInfo>,
 }
 
@@ -137,12 +137,12 @@ pub struct DataStorePreparePostParam {
 }
 
 #[derive(Debug, EndianRead, EndianWrite)]
-pub struct PostMetaBinaryRequest {
+pub struct PostMetaBinaryInput {
     pub param: NexStruct<DataStorePreparePostParam>,
 }
 
 #[derive(Debug, EndianRead, EndianWrite)]
-pub struct PostMetaBinaryResponse {
+pub struct PostMetaBinaryOutput {
     pub data_id: u64,
 }
 
@@ -179,14 +179,14 @@ pub struct DataStoreChangeMetaParam {
 }
 
 #[derive(Debug, EndianRead, EndianWrite)]
-pub struct ChangeMetasRequest {
+pub struct ChangeMetasInput {
     pub data_ids: NexList<u64>,
     pub params: NexList<NexStruct<DataStoreChangeMetaParam>>,
     pub transactional: bool,
 }
 
 #[derive(Debug, EndianRead, EndianWrite)]
-pub struct ChangeMetasResponse {
+pub struct ChangeMetasOutput {
     pub p_results: NexList<ResultCode>,
 }
 
@@ -197,7 +197,7 @@ pub struct GlobalTradeStationRecordKey {
 }
 
 #[derive(Debug, EndianRead, EndianWrite)]
-pub struct PrepareUploadPokemonResponse {
+pub struct PrepareUploadPokemonOutput {
     pub p_record_key: NexStruct<GlobalTradeStationRecordKey>,
 }
 
@@ -211,7 +211,7 @@ pub struct GlobalTradeStationUploadPokemonParam {
 }
 
 #[derive(Debug, EndianRead, EndianWrite)]
-pub struct UploadPokemonRequest {
+pub struct UploadPokemonInput {
     pub param: NexStruct<GlobalTradeStationUploadPokemonParam>,
 }
 
@@ -228,12 +228,12 @@ pub struct GlobalTradeStationPrepareTradePokemonParam {
 }
 
 #[derive(Debug, EndianRead, EndianWrite)]
-pub struct PrepareTradePokemonRequest {
+pub struct PrepareTradePokemonInput {
     pub param: NexStruct<GlobalTradeStationPrepareTradePokemonParam>,
 }
 
 #[derive(Debug, EndianRead, EndianWrite)]
-pub struct PrepareTradePokemonResponse {
+pub struct PrepareTradePokemonOutput {
     pub p_result: NexStruct<GlobalTradeStationPrepareTradePokemonResult>,
 }
 
@@ -263,12 +263,12 @@ pub struct GlobalTradeStationTradePokemonParam {
 }
 
 #[derive(Debug, EndianRead, EndianWrite)]
-pub struct TradePokemonRequest {
+pub struct TradePokemonInput {
     pub param: NexStruct<GlobalTradeStationTradePokemonParam>,
 }
 
 #[derive(Debug, EndianRead, EndianWrite)]
-pub struct TradePokemonResponse {
+pub struct TradePokemonOutput {
     pub p_result: NexStruct<GlobalTradeStationTradePokemonResult>,
 }
 
@@ -284,12 +284,12 @@ pub struct GlobalTradeStationDownloadOtherPokemonParam {
 }
 
 #[derive(Debug, EndianRead, EndianWrite)]
-pub struct DownloadOtherPokemonRequest {
+pub struct DownloadOtherPokemonInput {
     pub param: NexStruct<GlobalTradeStationDownloadOtherPokemonParam>,
 }
 
 #[derive(Debug, EndianRead, EndianWrite)]
-pub struct DownloadOtherPokemonResponse {
+pub struct DownloadOtherPokemonOutput {
     pub p_result: NexStruct<GlobalTradeStationTradePokemonResult>,
 }
 
@@ -305,12 +305,12 @@ pub struct GlobalTradeStationDownloadMyPokemonResult {
 }
 
 #[derive(Debug, EndianRead, EndianWrite)]
-pub struct DownloadMyPokemonRequest {
+pub struct DownloadMyPokemonInput {
     pub param: NexStruct<GlobalTradeStationDownloadMyPokemonParam>,
 }
 
 #[derive(Debug, EndianRead, EndianWrite)]
-pub struct DownloadMyPokemonResponse {
+pub struct DownloadMyPokemonOutput {
     pub p_result: NexStruct<GlobalTradeStationDownloadMyPokemonResult>,
 }
 
@@ -321,7 +321,7 @@ pub struct GlobalTradeStationDeletePokemonParam {
 }
 
 #[derive(Debug, EndianRead, EndianWrite)]
-pub struct DeletePokemonRequest {
+pub struct DeletePokemonInput {
     pub param: NexStruct<GlobalTradeStationDeletePokemonParam>,
 }
 
@@ -337,7 +337,7 @@ pub struct GlobalTradeStationSearchPokemonParam {
 }
 
 #[derive(Debug, EndianRead, EndianWrite)]
-pub struct SearchPokemonV2Request {
+pub struct SearchPokemonV2Input {
     pub param: NexStruct<GlobalTradeStationSearchPokemonParam>,
 }
 
@@ -358,6 +358,6 @@ pub struct GlobalTradeStationSearchPokemonResult {
 }
 
 #[derive(Debug, EndianRead, EndianWrite)]
-pub struct SearchPokemonV2Response {
+pub struct SearchPokemonV2Output {
     pub p_result: NexStruct<GlobalTradeStationSearchPokemonResult>,
 }

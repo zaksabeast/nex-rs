@@ -1,144 +1,38 @@
-use async_trait::async_trait;
-use nex_rs::{
-    client::ClientConnection, nex_types::ResultCode, result::NexResult, rmc::RMCRequest,
-    server::Server,
-};
+use nex_rs::macros::NexProtocol;
+use no_std_io::{EndianRead, EndianWrite};
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 
-#[derive(Debug, Clone, Copy, PartialEq, TryFromPrimitive, IntoPrimitive)]
+pub type Placeholder = u8;
+
+#[derive(Debug, Clone, Copy, PartialEq, TryFromPrimitive, IntoPrimitive, NexProtocol)]
 #[repr(u32)]
 pub enum HealthMethod {
+    #[protocol_method(output = "PingDaemonOutput")]
     PingDaemon = 0x1,
+    #[protocol_method(output = "PingDatabaseOutput")]
     PingDatabase = 0x2,
+    #[protocol_method(output = "RunSanityCheckOutput")]
     RunSanityCheck = 0x3,
+    #[protocol_method(output = "FixSanityErrorsOutput")]
     FixSanityErrors = 0x4,
 }
 
-#[async_trait]
-pub trait HealthProtocol: Server {
-    async fn ping_daemon(&self, client: &mut ClientConnection) -> Result<Vec<u8>, ResultCode>;
-    async fn ping_database(&self, client: &mut ClientConnection) -> Result<Vec<u8>, ResultCode>;
-    async fn run_sanity_check(&self, client: &mut ClientConnection) -> Result<Vec<u8>, ResultCode>;
-    async fn fix_sanity_errors(&self, client: &mut ClientConnection)
-        -> Result<Vec<u8>, ResultCode>;
+#[derive(EndianRead, EndianWrite)]
+pub struct PingDaemonOutput {
+    pub result: bool,
+}
 
-    async fn handle_ping_daemon(
-        &self,
-        client: &mut ClientConnection,
-        request: &RMCRequest,
-    ) -> NexResult<()> {
-        match self.ping_daemon(client).await {
-            Ok(data) => {
-                self.send_success(
-                    client,
-                    request.protocol_id,
-                    request.method_id,
-                    request.call_id,
-                    data,
-                )
-                .await?
-            }
-            Err(error_code) => {
-                self.send_error(
-                    client,
-                    request.protocol_id,
-                    request.method_id,
-                    request.call_id,
-                    error_code.into(),
-                )
-                .await?
-            }
-        }
-        Ok(())
-    }
+#[derive(EndianRead, EndianWrite)]
+pub struct PingDatabaseOutput {
+    pub result: bool,
+}
 
-    async fn handle_ping_database(
-        &self,
-        client: &mut ClientConnection,
-        request: &RMCRequest,
-    ) -> NexResult<()> {
-        match self.ping_database(client).await {
-            Ok(data) => {
-                self.send_success(
-                    client,
-                    request.protocol_id,
-                    request.method_id,
-                    request.call_id,
-                    data,
-                )
-                .await?
-            }
-            Err(error_code) => {
-                self.send_error(
-                    client,
-                    request.protocol_id,
-                    request.method_id,
-                    request.call_id,
-                    error_code.into(),
-                )
-                .await?
-            }
-        }
-        Ok(())
-    }
+#[derive(EndianRead, EndianWrite)]
+pub struct RunSanityCheckOutput {
+    pub result: bool,
+}
 
-    async fn handle_run_sanity_check(
-        &self,
-        client: &mut ClientConnection,
-        request: &RMCRequest,
-    ) -> NexResult<()> {
-        match self.run_sanity_check(client).await {
-            Ok(data) => {
-                self.send_success(
-                    client,
-                    request.protocol_id,
-                    request.method_id,
-                    request.call_id,
-                    data,
-                )
-                .await?
-            }
-            Err(error_code) => {
-                self.send_error(
-                    client,
-                    request.protocol_id,
-                    request.method_id,
-                    request.call_id,
-                    error_code.into(),
-                )
-                .await?
-            }
-        }
-        Ok(())
-    }
-
-    async fn handle_fix_sanity_errors(
-        &self,
-        client: &mut ClientConnection,
-        request: &RMCRequest,
-    ) -> NexResult<()> {
-        match self.fix_sanity_errors(client).await {
-            Ok(data) => {
-                self.send_success(
-                    client,
-                    request.protocol_id,
-                    request.method_id,
-                    request.call_id,
-                    data,
-                )
-                .await?
-            }
-            Err(error_code) => {
-                self.send_error(
-                    client,
-                    request.protocol_id,
-                    request.method_id,
-                    request.call_id,
-                    error_code.into(),
-                )
-                .await?
-            }
-        }
-        Ok(())
-    }
+#[derive(EndianRead, EndianWrite)]
+pub struct FixSanityErrorsOutput {
+    pub result: bool,
 }

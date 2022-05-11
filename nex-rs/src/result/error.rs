@@ -3,6 +3,9 @@ use crate::server;
 use snafu::Snafu;
 use std::fmt::Debug;
 
+/// The top level error for anything nex related.
+/// All server errors and generic errors provided by nex protocol trait
+/// implementations will eventually bubble up to this.
 #[derive(Debug, PartialEq, Snafu)]
 pub enum Error {
     #[snafu(display(

@@ -3,11 +3,12 @@ use nex_rs::{
     client::{ClientConnection, ClientContext},
     nex_types::ResultCode,
     packet::PacketV1,
-    result::{Error, NexResult},
+    result::NexError,
     rmc::RMCRequest,
     server::{BaseServer, EventHandler, Server, ServerResult},
 };
 use no_std_io::{EndianRead, EndianWrite, Writer};
+use std::fmt;
 
 #[derive(Debug, Default, EndianRead, EndianWrite)]
 pub struct AddInput {
@@ -39,37 +40,45 @@ struct MockServer {
 
 #[async_trait::async_trait]
 impl EventHandler for MockServer {
-    async fn on_syn(&self, _client: &mut ClientConnection, _packet: &PacketV1) -> NexResult<()> {
+    async fn on_syn(&self, _client: &mut ClientConnection, _packet: &PacketV1) -> ServerResult<()> {
         Ok(())
     }
     async fn on_connect(
         &self,
         _client: &mut ClientConnection,
         _packet: &PacketV1,
-    ) -> NexResult<()> {
+    ) -> ServerResult<()> {
         Ok(())
     }
-    async fn on_data(&self, _client: &mut ClientConnection, _packet: &PacketV1) -> NexResult<()> {
+    async fn on_data(
+        &self,
+        _client: &mut ClientConnection,
+        _packet: &PacketV1,
+    ) -> ServerResult<()> {
         Ok(())
     }
     async fn on_disconnect(
         &self,
         _client: &mut ClientConnection,
         _packet: &PacketV1,
-    ) -> NexResult<()> {
+    ) -> ServerResult<()> {
         Ok(())
     }
-    async fn on_ping(&self, _client: &mut ClientConnection, _packet: &PacketV1) -> NexResult<()> {
+    async fn on_ping(
+        &self,
+        _client: &mut ClientConnection,
+        _packet: &PacketV1,
+    ) -> ServerResult<()> {
         Ok(())
     }
     async fn on_rmc_request(
         &self,
         _client: &mut ClientConnection,
         _rmc_request: &RMCRequest,
-    ) -> NexResult<()> {
+    ) -> ServerResult<()> {
         Ok(())
     }
-    async fn on_error(&self, _error: Error) {}
+    async fn on_error(&self, _error: &nex_rs::result::Error) {}
 }
 
 #[async_trait::async_trait]
@@ -107,19 +116,36 @@ impl Server for MockServer {
     }
 }
 
+#[derive(Debug)]
+enum Error {}
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+impl NexError for Error {
+    fn error_code(&self) -> ResultCode {
+        0.into()
+    }
+}
+
 #[async_trait::async_trait]
 impl MathProtocol for MockServer {
+    type Error = Error;
+
     async fn add(
         &self,
         _client: &mut ClientConnection,
         input: AddInput,
-    ) -> Result<AddOutput, ResultCode> {
+    ) -> Result<AddOutput, Error> {
         Ok(AddOutput {
             sum: input.first + input.second,
         })
     }
 
-    async fn noop(&self, _client: &mut ClientConnection) -> Result<(), ResultCode> {
+    async fn noop(&self, _client: &mut ClientConnection) -> Result<(), Error> {
         Ok(())
     }
 }

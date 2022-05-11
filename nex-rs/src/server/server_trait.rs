@@ -110,7 +110,7 @@ pub trait Server: EventHandler {
             let clone = Arc::clone(&server);
             tokio::spawn(async move {
                 if let Err(error) = clone.handle_socket_message(buf, peer).await {
-                    clone.on_error(error.into()).await;
+                    clone.on_error(&error.into()).await;
                 }
             });
         }

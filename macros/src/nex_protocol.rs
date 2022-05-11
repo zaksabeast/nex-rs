@@ -46,7 +46,7 @@ fn create_variant_method(variant: &Variant) -> Option<proc_macro2::TokenStream> 
             &self,
             client: &mut nex_rs::client::ClientConnection,
             #method_input
-        ) -> Result<#method_output, nex_rs::nex_types::ResultCode>;
+        ) -> Result<#method_output, Self::Error>;
 
         async fn #handle_method_ident(
             &self,
@@ -72,7 +72,9 @@ fn create_variant_method(variant: &Variant) -> Option<proc_macro2::TokenStream> 
                     )
                     .await?
                 }
-                Err(error_code) => {
+                Err(error) => {
+                    let error_code = nex_rs::result::NexError::error_code(&error);
+                    nex_rs::server::EventHandler::on_error(self, &error.into()).await;
                     nex_rs::server::Server::send_error(
                         self,
                         client,
@@ -110,6 +112,7 @@ pub fn impl_nex_protocol(tokens: TokenStream) -> TokenStream {
     quote! {
         #[async_trait::async_trait]
         pub trait #protocol_ident: nex_rs::server::Server {
+            type Error: nex_rs::result::NexError;
             #(#variant_methods)*
         }
     }

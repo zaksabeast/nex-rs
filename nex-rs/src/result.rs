@@ -1,5 +1,6 @@
-use crate::server;
+use crate::{nex_types::ResultCode, server};
 use snafu::Snafu;
+use std::fmt::{Debug, Display};
 
 #[derive(Debug, PartialEq, Snafu)]
 pub enum Error {
@@ -26,4 +27,24 @@ impl From<&str> for Error {
     }
 }
 
-pub type NexResult<T> = Result<T, Error>;
+pub trait NexError: Debug + Display + Send {
+    fn error_code(&self) -> ResultCode;
+}
+
+pub type NexResult<T> = Result<T, Box<dyn NexError>>;
+
+impl From<Box<dyn NexError>> for Error {
+    fn from(error: Box<dyn NexError>) -> Self {
+        Self::Generic {
+            message: error.to_string(),
+        }
+    }
+}
+
+impl<T: NexError> From<T> for Error {
+    fn from(error: T) -> Self {
+        Self::Generic {
+            message: error.to_string(),
+        }
+    }
+}

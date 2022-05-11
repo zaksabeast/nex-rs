@@ -1,7 +1,7 @@
 use core::mem;
 use no_std_io::{EndianRead, EndianWrite, Error, ReadOutput, Writer};
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone, Copy, PartialEq)]
 pub struct ResultCode(u32);
 
 impl EndianRead for ResultCode {

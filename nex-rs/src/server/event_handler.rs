@@ -25,5 +25,6 @@ pub trait EventHandler {
         client: &mut ClientConnection,
         rmc_request: &RMCRequest,
     ) -> ServerResult<()>;
+    async fn on_protocol_method(&self, method_name: String);
     async fn on_error(&self, error: &NexError);
 }

@@ -8,6 +8,7 @@ use nex_rs::{
     server::{BaseServer, EventHandler, Server, ServerResult},
 };
 use no_std_io::{EndianRead, EndianWrite, Writer};
+use num_enum::{IntoPrimitive, TryFromPrimitive};
 use std::fmt;
 
 #[derive(Debug, Default, EndianRead, EndianWrite)]
@@ -25,7 +26,8 @@ pub struct AddOutput {
 // Typically this method would be used for routing.
 // We need it here to test code generation, but otherwise it won't be used.
 #[allow(dead_code)]
-#[derive(NexProtocol)]
+#[derive(Debug, IntoPrimitive, TryFromPrimitive, NexProtocol)]
+#[repr(u32)]
 enum MathMethod {
     #[protocol_method(input = "AddInput", output = "AddOutput")]
     Add = 1,
@@ -78,6 +80,7 @@ impl EventHandler for MockServer {
     ) -> ServerResult<()> {
         Ok(())
     }
+    async fn on_protocol_method(&self, _method_name: String) {}
     async fn on_error(&self, _error: &nex_rs::result::Error) {}
 }
 

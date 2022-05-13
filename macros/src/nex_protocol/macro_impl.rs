@@ -1,14 +1,18 @@
-use super::protocol_method::ProtocolMethodArgs;
-use heck::AsSnakeCase;
+use super::{
+    protocol_idents::NexProtocolIdentifiers, protocol_method::ProtocolMethodArgs,
+    protocol_method_idents::NexProtocolMethodIdentifiers,
+};
 use proc_macro::TokenStream;
-use proc_macro2::Span;
 use quote::{format_ident, quote};
-use syn::{self, parse_macro_input, Data, DataEnum, DeriveInput, Ident, Variant};
+use syn::{parse_macro_input, Data, DataEnum, DeriveInput, Ident, Variant};
 
-fn create_variant_method(variant: &Variant) -> Option<proc_macro2::TokenStream> {
-    let method_name = AsSnakeCase(variant.ident.to_string()).to_string();
-    let method_ident = Ident::new(&method_name, Span::call_site());
-    let handle_method_ident = format_ident!("handle_{}", method_ident);
+fn get_variant_methods(variant: &Variant) -> Option<proc_macro2::TokenStream> {
+    let NexProtocolMethodIdentifiers {
+        method_name,
+        method_ident,
+        handle_method_ident,
+        ..
+    } = NexProtocolMethodIdentifiers::new(variant);
     let input_read_error = format!("Cannot read {} input", method_name);
 
     let ProtocolMethodArgs { input, output } = ProtocolMethodArgs::new(variant)?;
@@ -93,27 +97,68 @@ fn create_variant_method(variant: &Variant) -> Option<proc_macro2::TokenStream> 
     Some(tokens)
 }
 
+fn get_variant_handle_branch(enum_ident: &Ident, variant: &Variant) -> proc_macro2::TokenStream {
+    let NexProtocolIdentifiers { protocol_ident, .. } = NexProtocolIdentifiers::new(enum_ident);
+    let NexProtocolMethodIdentifiers {
+        handle_method_ident,
+        ..
+    } = NexProtocolMethodIdentifiers::new(variant);
+    let variant_ident = &variant.ident;
+
+    quote! {
+        #enum_ident::#variant_ident => #protocol_ident::#handle_method_ident(self, client, request).await?,
+    }
+}
+
 pub fn impl_nex_protocol(tokens: TokenStream) -> TokenStream {
     let input = parse_macro_input!(tokens as DeriveInput);
 
-    let enum_variants = match input.data {
+    let protocol_method_variants = match input.data {
         Data::Enum(DataEnum { variants, .. }) => variants,
         _ => panic!("Only enums can derive NexProtocol"),
     };
 
-    let variant_methods = enum_variants
+    let protocol_method_enum_ident = &input.ident;
+
+    let variant_methods = protocol_method_variants
         .iter()
-        .map(|variant| create_variant_method(variant).unwrap_or_default())
+        .map(|variant| get_variant_methods(variant).unwrap_or_default())
         .collect::<Vec<proc_macro2::TokenStream>>();
 
-    let protocol_name = input.ident.to_string().replace("Method", "");
-    let protocol_ident = Ident::new(&format!("{}Protocol", protocol_name), Span::call_site());
+    let variant_handle_branches = protocol_method_variants
+        .iter()
+        .map(|variant| get_variant_handle_branch(protocol_method_enum_ident, variant))
+        .collect::<Vec<proc_macro2::TokenStream>>();
+
+    let NexProtocolIdentifiers {
+        protocol_ident,
+        protocol_name,
+        protocol_method_name,
+    } = NexProtocolIdentifiers::new(protocol_method_enum_ident);
+    let handle_method = format_ident!("handle_{}_method", protocol_name);
 
     quote! {
         #[async_trait::async_trait]
         pub trait #protocol_ident: nex_rs::server::Server {
             type Error: nex_rs::result::NexError;
             #(#variant_methods)*
+
+            async fn #handle_method(
+                &self,
+                client: &mut nex_rs::client::ClientConnection,
+                request: &nex_rs::rmc::RMCRequest,
+            ) -> nex_rs::server::ServerResult<()> {
+                let parsed_method = #protocol_method_enum_ident::try_from(request.method_id).ok();
+
+                if let Some(method) = parsed_method {
+                    nex_rs::server::EventHandler::on_protocol_method(self, format!("{}::{:?}", #protocol_method_name, method)).await;
+                    match method {
+                        #(#variant_handle_branches)*
+                    }
+                };
+
+                Ok(())
+            }
         }
     }
     .into()

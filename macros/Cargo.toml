@@ -14,7 +14,8 @@ heck = "0.4.0"
 
 [dev-dependencies]
 async-trait = "0.1.52"
-no_std_io = { git = "https://github.com/zaksabeast/no_std_io.git", rev = "4a9ca86" }
 nex-protocols-rs = { path = "../nex-protocols-rs" }
 nex-rs = { path = "../nex-rs" }
+no_std_io = { git = "https://github.com/zaksabeast/no_std_io.git", rev = "4a9ca86" }
+num_enum = { version = "0.5", default-features = false }
 tokio = { version = "1", features = ["full"] }

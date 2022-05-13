@@ -1,51 +1,12 @@
-use super::protocol_method::ProtocolMethodArgs;
-use heck::AsSnakeCase;
+use super::{
+    protocol_idents::NexProtocolIdentifiers, protocol_method::ProtocolMethodArgs,
+    protocol_method_idents::NexProtocolMethodIdentifiers,
+};
 use proc_macro::TokenStream;
-use proc_macro2::Span;
 use quote::{format_ident, quote};
-use syn::{self, parse_macro_input, Data, DataEnum, DeriveInput, Ident, Variant};
+use syn::{parse_macro_input, Data, DataEnum, DeriveInput, Ident, Variant};
 
-struct NexProtocolIdentifiers {
-    protocol_ident: Ident,
-    protocol_name: String,
-    protocol_method_name: String,
-}
-
-impl NexProtocolIdentifiers {
-    fn new(enum_ident: &Ident) -> Self {
-        let protocol_method_name = enum_ident.to_string();
-        let protocol_name = protocol_method_name.replace("Method", "");
-        let protocol_ident = format_ident!("{}Protocol", protocol_name);
-
-        Self {
-            protocol_ident,
-            protocol_name: AsSnakeCase(protocol_name).to_string(),
-            protocol_method_name,
-        }
-    }
-}
-
-struct NexProtocolMethodIdentifiers {
-    method_ident: Ident,
-    handle_method_ident: Ident,
-    method_name: String,
-}
-
-impl NexProtocolMethodIdentifiers {
-    fn new(enum_variant: &Variant) -> Self {
-        let method_name = AsSnakeCase(enum_variant.ident.to_string()).to_string();
-        let method_ident = Ident::new(&method_name, Span::call_site());
-        let handle_method_ident = format_ident!("handle_{}", method_ident);
-
-        Self {
-            method_ident,
-            handle_method_ident,
-            method_name,
-        }
-    }
-}
-
-fn get_variant_method(variant: &Variant) -> Option<proc_macro2::TokenStream> {
+fn get_variant_methods(variant: &Variant) -> Option<proc_macro2::TokenStream> {
     let NexProtocolMethodIdentifiers {
         method_name,
         method_ident,
@@ -151,28 +112,29 @@ fn get_variant_handle_branch(enum_ident: &Ident, variant: &Variant) -> proc_macr
 
 pub fn impl_nex_protocol(tokens: TokenStream) -> TokenStream {
     let input = parse_macro_input!(tokens as DeriveInput);
-    let protocol_method_ident = &input.ident;
 
-    let enum_variants = match input.data {
+    let protocol_method_variants = match input.data {
         Data::Enum(DataEnum { variants, .. }) => variants,
         _ => panic!("Only enums can derive NexProtocol"),
     };
 
-    let variant_methods = enum_variants
+    let protocol_method_enum_ident = &input.ident;
+
+    let variant_methods = protocol_method_variants
         .iter()
-        .map(|variant| get_variant_method(variant).unwrap_or_default())
+        .map(|variant| get_variant_methods(variant).unwrap_or_default())
         .collect::<Vec<proc_macro2::TokenStream>>();
 
-    let variant_handle_branches = enum_variants
+    let variant_handle_branches = protocol_method_variants
         .iter()
-        .map(|variant| get_variant_handle_branch(protocol_method_ident, variant))
+        .map(|variant| get_variant_handle_branch(protocol_method_enum_ident, variant))
         .collect::<Vec<proc_macro2::TokenStream>>();
 
     let NexProtocolIdentifiers {
         protocol_ident,
         protocol_name,
         protocol_method_name,
-    } = NexProtocolIdentifiers::new(protocol_method_ident);
+    } = NexProtocolIdentifiers::new(protocol_method_enum_ident);
     let handle_method = format_ident!("handle_{}_method", protocol_name);
 
     quote! {
@@ -186,7 +148,7 @@ pub fn impl_nex_protocol(tokens: TokenStream) -> TokenStream {
                 client: &mut nex_rs::client::ClientConnection,
                 request: &nex_rs::rmc::RMCRequest,
             ) -> nex_rs::server::ServerResult<()> {
-                let parsed_method = #protocol_method_ident::try_from(request.method_id).ok();
+                let parsed_method = #protocol_method_enum_ident::try_from(request.method_id).ok();
 
                 if let Some(method) = parsed_method {
                     nex_rs::server::EventHandler::on_protocol_method(self, format!("{}::{:?}", #protocol_method_name, method)).await;

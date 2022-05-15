@@ -1,6 +1,7 @@
 use nex_rs::{
     macros::NexProtocol,
     nex_types::{DataHolder, NexList, NexQBuffer, NexString, ResultCode},
+    route::NexProtocol,
 };
 use no_std_io::{EndianRead, EndianWrite};
 use num_enum::{IntoPrimitive, TryFromPrimitive};
@@ -29,6 +30,10 @@ pub enum SecureConnectionMethod {
     ReplaceUrl = 0x7,
     #[protocol_method(input = "SendReportInput")]
     SendReport = 0x8,
+}
+
+impl NexProtocol for SecureConnectionMethod {
+    const PROTOCOL_ID: u8 = SECURE_CONNECTION_PROTOCOL_ID;
 }
 
 #[derive(EndianRead, EndianWrite)]

@@ -1,6 +1,7 @@
 use nex_rs::{
     macros::NexProtocol,
     nex_types::{NexBuffer, NexList, NexMap, NexString, NexStruct, NexVariant, ResultRange},
+    route::NexProtocol,
 };
 use no_std_io::{EndianRead, EndianWrite};
 use num_enum::{IntoPrimitive, TryFromPrimitive};
@@ -28,6 +29,10 @@ pub enum MatchmakeExtensionMethod {
     GetAttractionStatus = 0x31,
     #[protocol_method(input = "SimpleMatchmakeInput", output = "SimpleMatchmakeOutput")]
     SimpleMatchmake = 0x33,
+}
+
+impl NexProtocol for MatchmakeExtensionMethod {
+    const PROTOCOL_ID: u8 = MATCHMAKE_EXTENSION_PROTOCOL_ID;
 }
 
 #[derive(EndianRead, EndianWrite)]

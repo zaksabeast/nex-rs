@@ -1,3 +1,4 @@
+use crate::route::NexProtocol;
 use no_std_io::{
     Cursor, EndianRead, EndianWrite, Error, ReadOutput, StreamContainer, StreamReader, StreamWriter,
 };
@@ -9,6 +10,12 @@ pub struct RMCRequest {
     pub method_id: u32,
     pub parameters: Vec<u8>,
     pub custom_id: u16,
+}
+
+impl RMCRequest {
+    pub fn is_method<T: NexProtocol + Into<u32>>(&self, method: T) -> bool {
+        self.protocol_id == T::PROTOCOL_ID && self.method_id == method.into()
+    }
 }
 
 impl EndianRead for RMCRequest {

@@ -1,4 +1,4 @@
-use nex_rs::macros::NexProtocol;
+use nex_rs::{macros::NexProtocol, route::NexProtocol};
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 
 pub const USUM_117_PROTOCOL_ID: u8 = 0x75;
@@ -16,4 +16,8 @@ pub enum USUM117Method {
     Unknown10 = 0xA,
     #[protocol_method(output = "u32")]
     Unknown15 = 0xF,
+}
+
+impl NexProtocol for USUM117Method {
+    const PROTOCOL_ID: u8 = USUM_117_PROTOCOL_ID;
 }

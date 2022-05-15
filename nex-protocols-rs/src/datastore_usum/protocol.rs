@@ -6,7 +6,7 @@ use super::types::{
     SearchPokemonV2Input, SearchPokemonV2Output, TradePokemonInput, TradePokemonOutput,
     UploadPokemonInput,
 };
-use nex_rs::macros::NexProtocol;
+use nex_rs::{macros::NexProtocol, route::NexProtocol};
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 
 pub const DATASTORE_PROTOCOL_ID: u8 = 0x73;
@@ -44,4 +44,8 @@ pub enum DataStoreMethod {
     DeletePokemon = 0x36,
     #[protocol_method(input = "SearchPokemonV2Input", output = "SearchPokemonV2Output")]
     SearchPokemonV2 = 0x37,
+}
+
+impl NexProtocol for DataStoreMethod {
+    const PROTOCOL_ID: u8 = DATASTORE_PROTOCOL_ID;
 }

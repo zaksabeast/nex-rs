@@ -1,6 +1,7 @@
 use nex_rs::{
     macros::NexProtocol,
     nex_types::{DataHolder, DateTime, NexBuffer, NexList, NexString, NexStruct, ResultCode},
+    route::NexProtocol,
 };
 use no_std_io::{EndianRead, EndianWrite};
 use num_enum::{IntoPrimitive, TryFromPrimitive};
@@ -22,6 +23,10 @@ pub enum TicketGrantingMethod {
     GetName = 0x5,
     #[protocol_method(input = "LoginWithContextInput", output = "LoginWithContextOutput")]
     LoginWithContext = 0x6,
+}
+
+impl NexProtocol for TicketGrantingMethod {
+    const PROTOCOL_ID: u8 = AUTHENTICATION_PROTOCOL_ID;
 }
 
 #[derive(Debug, EndianRead, EndianWrite)]

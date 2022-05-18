@@ -1,34 +1,25 @@
 use nex_rs::{
-    macros::NexProtocol,
     nex_types::{DataHolder, NexList, NexQBuffer, NexString, ResultCode},
+    route::NexProtocol,
 };
 use no_std_io::{EndianRead, EndianWrite};
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 
-pub const SECURE_CONNECTION_PROTOCOL_ID: u8 = 0xB;
-
-#[derive(Debug, Clone, Copy, PartialEq, TryFromPrimitive, IntoPrimitive, NexProtocol)]
+#[derive(Debug, Clone, Copy, PartialEq, TryFromPrimitive, IntoPrimitive)]
 #[repr(u32)]
 pub enum SecureConnectionMethod {
-    #[protocol_method(input = "RegisterInput", output = "RegisterOutput")]
     Register = 0x1,
-    #[protocol_method(
-        input = "RequestConnectionDataInput",
-        output = "RequestConnectionDataOutput"
-    )]
     RequestConnectionData = 0x2,
-    #[protocol_method(input = "RequestUrlsInput", output = "RequestUrlsOutput")]
     RequestUrls = 0x3,
-    #[protocol_method(input = "RegisterExInput", output = "RegisterExOutput")]
     RegisterEx = 0x4,
-    #[protocol_method]
     TestConnectivity = 0x5,
-    #[protocol_method(input = "UpdateUrlsInput")]
     UpdateUrls = 0x6,
-    #[protocol_method(input = "ReplaceUrlInput")]
     ReplaceUrl = 0x7,
-    #[protocol_method(input = "SendReportInput")]
     SendReport = 0x8,
+}
+
+impl NexProtocol for SecureConnectionMethod {
+    const PROTOCOL_ID: u8 = 0xB;
 }
 
 #[derive(EndianRead, EndianWrite)]

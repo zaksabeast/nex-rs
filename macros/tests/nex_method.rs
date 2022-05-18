@@ -1,15 +1,15 @@
-use macros::NexProtocol;
+use macros::{nex_method, nex_route};
 use nex_rs::{
     client::{ClientConnection, ClientContext},
-    nex_types::ResultCode,
+    nex_types::Empty,
     packet::PacketV1,
-    result::NexError,
+    result::SuccessfulResult,
     rmc::RMCRequest,
+    route::{NexProtocol, Route},
     server::{BaseServer, EventHandler, Server, ServerResult},
 };
 use no_std_io::{EndianRead, EndianWrite, Writer};
 use num_enum::{IntoPrimitive, TryFromPrimitive};
-use std::fmt;
 
 #[derive(Debug, Default, EndianRead, EndianWrite)]
 pub struct AddInput {
@@ -22,17 +22,31 @@ pub struct AddOutput {
     sum: u32,
 }
 
-// Methods for the pretend nex "Math" protocol
-// Typically this method would be used for routing.
-// We need it here to test code generation, but otherwise it won't be used.
-#[allow(dead_code)]
-#[derive(Debug, IntoPrimitive, TryFromPrimitive, NexProtocol)]
+#[derive(Debug, IntoPrimitive, TryFromPrimitive)]
 #[repr(u32)]
 enum MathMethod {
-    #[protocol_method(input = "AddInput", output = "AddOutput")]
     Add = 1,
-    #[protocol_method]
     Noop = 2,
+}
+
+impl NexProtocol for MathMethod {
+    const PROTOCOL_ID: u8 = 1;
+}
+
+#[nex_method(method = MathMethod::Add)]
+async fn add(
+    _server: &MockServer,
+    _client: &ClientConnection,
+    input: AddInput,
+) -> SuccessfulResult<AddOutput> {
+    Ok(AddOutput {
+        sum: input.first + input.second,
+    })
+}
+
+#[nex_method(method = MathMethod::Noop)]
+async fn noop(_server: &MockServer, _client: &ClientConnection) -> SuccessfulResult<Empty> {
+    Ok(Empty)
 }
 
 #[derive(Default)]
@@ -119,40 +133,6 @@ impl Server for MockServer {
     }
 }
 
-#[derive(Debug)]
-enum Error {}
-
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{:?}", self)
-    }
-}
-
-impl NexError for Error {
-    fn error_code(&self) -> ResultCode {
-        0.into()
-    }
-}
-
-#[async_trait::async_trait]
-impl MathProtocol for MockServer {
-    type Error = Error;
-
-    async fn add(
-        &self,
-        _client: &mut ClientConnection,
-        input: AddInput,
-    ) -> Result<AddOutput, Error> {
-        Ok(AddOutput {
-            sum: input.first + input.second,
-        })
-    }
-
-    async fn noop(&self, _client: &mut ClientConnection) -> Result<(), Error> {
-        Ok(())
-    }
-}
-
 fn get_server_and_client() -> (MockServer, ClientConnection) {
     // Set up server
     let server = MockServer::default();
@@ -166,18 +146,7 @@ fn get_server_and_client() -> (MockServer, ClientConnection) {
 }
 
 #[tokio::test]
-async fn generates_method() {
-    let (server, mut client) = get_server_and_client();
-    let input = AddInput {
-        first: 1,
-        second: 2,
-    };
-    let result = server.add(&mut client, input).await.unwrap();
-    assert_eq!(result, AddOutput { sum: 3 })
-}
-
-#[tokio::test]
-async fn generates_handle_method() {
+async fn generates_route() {
     let (server, mut client) = get_server_and_client();
     let mut input = vec![];
     input.checked_write_le(0, &AddInput::default());
@@ -190,6 +159,31 @@ async fn generates_handle_method() {
         parameters: input,
     };
 
-    let result = server.handle_add(&mut client, &request).await;
+    let result = Route::<{ MathMethod::PROTOCOL_ID as u8 }, { MathMethod::Add as u32 }>::run(
+        &server,
+        &mut client,
+        &request,
+    )
+    .await;
+
+    assert_eq!(result, Ok(()))
+}
+
+#[tokio::test]
+async fn routes_method() {
+    let (server, mut client) = get_server_and_client();
+    let mut input = vec![];
+    input.checked_write_le(0, &AddInput::default());
+
+    let request = RMCRequest {
+        protocol_id: 1,
+        call_id: 1,
+        method_id: 1,
+        custom_id: 1,
+        parameters: input,
+    };
+
+    let result = nex_route![MathMethod::Add](&server, &mut client, &request).await;
+
     assert_eq!(result, Ok(()))
 }

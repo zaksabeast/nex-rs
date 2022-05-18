@@ -1,27 +1,23 @@
 use nex_rs::{
-    macros::NexProtocol,
     nex_types::{DataHolder, DateTime, NexBuffer, NexList, NexString, NexStruct, ResultCode},
+    route::NexProtocol,
 };
 use no_std_io::{EndianRead, EndianWrite};
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 
-pub const AUTHENTICATION_PROTOCOL_ID: u8 = 0xA;
-
-#[derive(Debug, Clone, Copy, PartialEq, TryFromPrimitive, IntoPrimitive, NexProtocol)]
+#[derive(Debug, Clone, Copy, PartialEq, TryFromPrimitive, IntoPrimitive)]
 #[repr(u32)]
 pub enum TicketGrantingMethod {
-    #[protocol_method(input = "LoginInput", output = "LoginOutput")]
     Login = 0x1,
-    #[protocol_method(input = "LoginExInput", output = "LoginExOutput")]
     LoginEx = 0x2,
-    #[protocol_method(input = "RequestTicketInput", output = "RequestTicketOutput")]
     RequestTicket = 0x3,
-    #[protocol_method(input = "GetPIDInput", output = "GetPIDOutput")]
     GetPID = 0x4,
-    #[protocol_method(input = "GetNameInput", output = "GetNameOutput")]
     GetName = 0x5,
-    #[protocol_method(input = "LoginWithContextInput", output = "LoginWithContextOutput")]
     LoginWithContext = 0x6,
+}
+
+impl NexProtocol for TicketGrantingMethod {
+    const PROTOCOL_ID: u8 = 0xA;
 }
 
 #[derive(Debug, EndianRead, EndianWrite)]

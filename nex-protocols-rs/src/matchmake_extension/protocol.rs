@@ -1,33 +1,23 @@
 use nex_rs::{
-    macros::NexProtocol,
     nex_types::{NexBuffer, NexList, NexMap, NexString, NexStruct, NexVariant, ResultRange},
+    route::NexProtocol,
 };
 use no_std_io::{EndianRead, EndianWrite};
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 
-pub const MATCHMAKE_EXTENSION_PROTOCOL_ID: u8 = 0x6D;
-
-#[derive(Debug, Clone, Copy, PartialEq, TryFromPrimitive, IntoPrimitive, NexProtocol)]
+#[derive(Debug, Clone, Copy, PartialEq, TryFromPrimitive, IntoPrimitive)]
 #[repr(u32)]
 pub enum MatchmakeExtensionMethod {
-    #[protocol_method(input = "CloseParticipationInput")]
     CloseParticipation = 0x1,
-    #[protocol_method(input = "OpenParticipationInput")]
     OpenParticipation = 0x2,
-    #[protocol_method(
-        input = "BrowseMatchmakeSessionInput",
-        output = "BrowseMatchmakeSessionOutput"
-    )]
     BrowseMatchmakeSession = 0x4,
-    #[protocol_method(
-        input = "BrowseMatchmakeSessionWithHostUrlsInput",
-        output = "BrowseMatchmakeSessionWithHostUrlsOutput"
-    )]
     BrowseMatchmakeSessionWithHostUrls = 0x5,
-    #[protocol_method(output = "GetAttractionStatusOutput")]
     GetAttractionStatus = 0x31,
-    #[protocol_method(input = "SimpleMatchmakeInput", output = "SimpleMatchmakeOutput")]
     SimpleMatchmake = 0x33,
+}
+
+impl NexProtocol for MatchmakeExtensionMethod {
+    const PROTOCOL_ID: u8 = 0x6D;
 }
 
 #[derive(EndianRead, EndianWrite)]

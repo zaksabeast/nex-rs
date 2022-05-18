@@ -1,16 +1,11 @@
-use nex_rs::{
-    macros::NexProtocol,
-    nex_types::{NexList, NexString},
-};
+use nex_rs::nex_types::{NexList, NexString};
 use no_std_io::{EndianRead, EndianWrite};
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 
-#[derive(Debug, Clone, Copy, PartialEq, TryFromPrimitive, IntoPrimitive, NexProtocol)]
+#[derive(Debug, Clone, Copy, PartialEq, TryFromPrimitive, IntoPrimitive)]
 #[repr(u32)]
 pub enum MonitoringMethod {
-    #[protocol_method(output = "PingDaemonOutput")]
     PingDaemon = 0x1,
-    #[protocol_method(output = "GetClusterMembersOutput")]
     GetClusterMembers = 0x2,
 }
 

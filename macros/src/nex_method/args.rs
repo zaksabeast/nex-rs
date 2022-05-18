@@ -1,8 +1,10 @@
 use crate::utils::enum_variant::EnumVariant;
-use syn::parse::{Parse, ParseStream};
-use syn::punctuated::Punctuated;
-use syn::token::Comma;
-use syn::{Path, Result, Token};
+use syn::{
+    parse::{Parse, ParseStream},
+    punctuated::Punctuated,
+    token::Comma,
+    Path, Result, Token,
+};
 
 #[derive(Debug)]
 pub struct MethodArg {

@@ -1,7 +1,9 @@
 use quote::quote;
 use std::fmt;
-use syn::parse::{Parse, ParseStream};
-use syn::{Ident, Result, Token, Variant};
+use syn::{
+    parse::{Parse, ParseStream},
+    Ident, Result, Token, Variant,
+};
 
 #[derive(Debug)]
 pub struct EnumVariant {

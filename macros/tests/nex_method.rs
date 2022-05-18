@@ -1,10 +1,10 @@
 use macros::{nex_method, nex_route};
 use nex_rs::{
     client::{ClientConnection, ClientContext},
+    nex_types::Empty,
     packet::PacketV1,
     result::SuccessfulResult,
     rmc::RMCRequest,
-    nex_types::Empty,
     route::{NexProtocol, Route},
     server::{BaseServer, EventHandler, Server, ServerResult},
 };
